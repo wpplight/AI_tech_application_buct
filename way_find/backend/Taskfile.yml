@@ -1,0 +1,30 @@
+version: '3'
+
+includes:
+  linux: ./build/linux/Taskfile.yml
+
+vars:
+  APP_NAME: "wayfind"
+  BIN_DIR: "bin"
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+
+tasks:
+  build:
+    summary: Build the application
+    cmds:
+      - wails3 build
+
+  dev:
+    summary: Runs the application in development mode
+    cmds:
+      - wails3 dev -port {{.VITE_PORT}}
+
+  package:
+    summary: Package the application
+    cmds:
+      - wails3 package
+
+  run:
+    summary: Run the application
+    cmds:
+      - go run .

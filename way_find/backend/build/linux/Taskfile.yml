@@ -1,0 +1,114 @@
+version: '3'
+
+vars:
+  FRONTEND_DIR: ../frontend
+  WAIT_TIMEOUT: 60
+
+tasks:
+  go:mod:tidy:
+    summary: Runs `go mod tidy`
+    internal: true
+    cmds:
+      - go mod tidy
+
+  install:frontend:deps:
+    summary: Install frontend dependencies
+    dir: "{{.FRONTEND_DIR}}"
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules
+    cmds:
+      - npm install
+
+  generate:bindings:
+    label: generate:bindings (BUILD_FLAGS={{.BUILD_FLAGS}})
+    summary: Generates bindings for the frontend
+    deps:
+      - task: go:mod:tidy
+    sources:
+      - "**/*.[jt]s"
+      - exclude: ../frontend/**/*
+      - ../frontend/src/services/**/*
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - ../frontend/src/services/wailsjs/**/*
+    cmds:
+      - wails3 generate bindings -d ../frontend/src/services -f '{{.BUILD_FLAGS}}' -clean=true
+    vars:
+      BUILD_FLAGS: ""
+
+  build:frontend:
+    label: build:frontend (DEV={{.DEV}})
+    summary: Build the frontend project
+    dir: "{{.FRONTEND_DIR}}"
+    sources:
+      - "**/*"
+      - exclude: node_modules/**/*
+      - exclude: ../frontend/src/composables/wails.ts
+    generates:
+      - dist/**/*
+    deps:
+      - task: install:frontend:deps
+      - task: generate:bindings
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+    cmds:
+      - npm run {{.BUILD_COMMAND}} -q
+    env:
+      PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
+    vars:
+      BUILD_COMMAND: '{{if eq .DEV "true"}}dev{{else}}build{{end}}'
+
+  wait:frontend:
+    summary: Wait for frontend dev server to be ready
+    internal: true
+    cmds:
+      - |
+        echo "Waiting for frontend dev server..."
+        for i in $(seq 1 {{.WAIT_TIMEOUT}}); do
+          if curl -s http://localhost:5173 > /dev/null 2>&1; then
+            echo "Frontend server ready on http://localhost:5173"
+            exit 0
+          fi
+          if curl -s http://localhost:5174 > /dev/null 2>&1; then
+            echo "Frontend server ready on http://localhost:5174"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Frontend server did not start in {{.WAIT_TIMEOUT}} seconds"
+        exit 1
+
+  build:
+    summary: Build Linux application
+    deps:
+      - task: go:mod:tidy
+      - task: build:frontend
+        vars:
+          DEV: "false"
+    cmds:
+      - go build -tags desktop -o "bin/{{.APP_NAME}}"
+    vars:
+      BIN_DIR: "bin"
+
+  package:
+    summary: Package Linux application
+    deps:
+      - task: build
+    cmds:
+      - mkdir -p "{{.BIN_DIR}}"
+
+  run:
+    summary: Run Linux application
+    deps:
+      - task: build:frontend
+        vars:
+          DEV: "true"
+    cmds:
+      - task: wait:frontend
+      - go run .

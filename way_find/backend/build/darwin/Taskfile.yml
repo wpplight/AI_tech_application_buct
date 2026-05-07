@@ -1,0 +1,27 @@
+version: '3'
+
+vars:
+  ROOT_DIR: ..
+  FRONTEND_INSTALL: npm install
+  FRONTEND_BUILD: npm run build
+  WAILS_GEN_BINDINGS: wails3 generate bindings
+
+tasks:
+  darwin:build:
+    summary: Build macOS application
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - task: common:prepare
+      - go build -tags desktop -o "{{.BIN_DIR}}/{{.APP_NAME}}"
+
+  darwin:package:
+    summary: Package macOS application
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - task: darwin:build
+
+  darwin:run:
+    summary: Run macOS application
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - go run .

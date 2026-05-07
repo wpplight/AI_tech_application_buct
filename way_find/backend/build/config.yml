@@ -1,0 +1,107 @@
+wails: v3
+
+log_level: debug
+debounce: 1000
+
+ignore:
+  dir:
+    - .git
+    - node_modules
+    - frontend
+    - bin
+  file:
+    - .DS_Store
+    - .gitignore
+    - .gitkeep
+
+watched_extension:
+  - "*.go"
+  - "*.js"
+  - "*.ts"
+
+git_ignore: true
+
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  executes:
+    - cmd: wails3 build DEV=true
+      type: blocking
+    - cmd: wails3 task linux:build:frontend
+      type: background
+    - cmd: wails3 task linux:run
+      type: primary
+
+frontend:
+  dir: ../frontend
+  install: npm install
+  build: npm run build
+  dev: npm run dev
+  devServerUrl: auto
+
+info:
+  companyName: WayFind
+  productName: WayFind Pathfinding Visualizer
+  productVersion: 1.0.0
+  copyright: Copyright 2024
+  comments: A pathfinding algorithm visualization tool
+
+outputfilename: wayfind
+
+author:
+  name: WayFind Team
+  email: team@wayfind.example
+
+wailsjsdir: ../frontend/src/services
+
+platforms:
+  - linux
+  - darwin
+  - windows
+
+nsis:
+  displayLanguageSelector: false
+  installerIcon: ./frontend/public/favicon.ico
+  headerImage: null
+  license: null
+  languages:
+    - English
+  licenseFile: null
+  template: null
+  threeDimensionalHeaders: false
+  version: null
+
+linux:
+  icon: ./frontend/public/favicon.ico
+  category: Education
+  shell: null
+
+mac:
+  icon: ./frontend/public/favicon.ico
+  bundleId: com.wayfind.app
+  category: public.app-category.education
+  signingIdentity: null
+  identifier: null
+  entitlements: null
+  entitlementsFile: null
+
+windows:
+  icon: ./frontend/public/favicon.ico
+  webview2installpermission: perUser
+  allowDowngrade: true
+  key: null
+  certificate: null
+  timestamp: null
+  wix: null
+  nsis:
+    displayLanguageSelector: false
+    installerIcon: ./frontend/public/favicon.ico
+    headerImage: null
+    license: null
+    languages:
+      - English
+    licenseFile: null
+    template: null
+    threeDimensionalHeaders: false
+    version: null
