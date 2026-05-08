@@ -14,16 +14,16 @@ const (
 )
 
 type StepResult struct {
-	State      SearchState
-	Current    mappkg.Point
-	Neighbors  []mappkg.Point
-	Added      []mappkg.Point
-	Pruned     []mappkg.Point
-	Path       []mappkg.Point
-	Visited    []mappkg.Point
-	Distance   int
-	Expanded   int
-	StepsTaken int
+	State      SearchState `json:"state"`
+	Current    mappkg.Point `json:"current"`
+	Neighbors  []mappkg.Point `json:"neighbors"`
+	Added      []mappkg.Point `json:"added"`
+	Pruned     []mappkg.Point `json:"pruned"`
+	Path       []mappkg.Point `json:"path"`
+	Visited    []mappkg.Point `json:"visited"`
+	Distance   int `json:"distance"`
+	Expanded   int `json:"expanded"`
+	StepsTaken int `json:"stepsTaken"`
 }
 
 type Searcher interface {

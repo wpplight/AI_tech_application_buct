@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 )
 
 type WayFindService struct {
-	ctx           context.Context
 	currentMap    *mappkg.Map
 	currentSearch algorithms.Searcher
 	mapStorage    *storage.FileMapStorage
@@ -28,16 +26,10 @@ func NewWayFindService() *WayFindService {
 	s, _ := storage.NewFileMapStorage(defaultPath)
 
 	return &WayFindService{
-		ctx:           nil,
 		currentMap:    nil,
 		currentSearch: nil,
 		mapStorage:    s,
 	}
-}
-
-func (s *WayFindService) ServiceStartup(ctx context.Context) error {
-	s.ctx = ctx
-	return nil
 }
 
 type MapData struct {

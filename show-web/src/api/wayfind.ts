@@ -1,34 +1,27 @@
 /**
  * 寻路算法 API 服务
- * 提供迷宫寻路系统的 API 调用封装
+ * 地图和任务是两个独立的子系统
  */
 
-import { API_CONFIG, buildUrl } from './index'
+import { API_CONFIG } from './index'
 
-// 单元格类型
-export type CellType = 0 | 1 | 2 | 3  // 0=道路, 1=墙壁, 2=起点, 3=终点
+export type CellType = 0 | 1 | 2 | 3
 
-// 点坐标
 export interface Point {
   x: number
   y: number
 }
 
-// 地图数据
 export interface MapData {
   width: number
   height: number
-  startPoint: Point
-  endPoint: Point
+  startPoint?: Point
+  endPoint?: Point
   grid: number[][]
 }
 
-// 搜索状态
-export type SearchState = 'ready' | 'running' | 'found' | 'not_found'
-
-// 搜索步骤
 export interface SearchStep {
-  state: SearchState
+  state: string
   current: Point
   neighbors: Point[]
   added: Point[]
@@ -40,56 +33,42 @@ export interface SearchStep {
   stepsTaken: number
 }
 
-// 搜索结果
 export interface SearchResult {
   found: boolean
   distance: number
   path: Point[]
   algorithm: string
-  expanded?: number
-  execution_time_ms?: number
-  optimal?: boolean
+  expanded: number
 }
 
-// 算法类型
 export type PathfindingAlgorithm = 'dfs' | 'bfs' | 'astar'
 
-// 地图创建请求
-export interface CreateMapRequest {
+export interface TaskInfo {
+  taskId: string
+  name: string
+  mapName?: string
+  state: string
+  algorithm: string
   width: number
   height: number
-  obstacles?: Point[]
+  createdAt: string
+  updatedAt: string
 }
 
-// 单元格更新请求
-export interface UpdateCellRequest {
-  cells: Array<{
-    x: number
-    y: number
-    type: 'road' | 'wall' | 'start' | 'end'
-  }>
+export interface MapInfo {
+  name: string
+  width: number
+  height: number
+  createdAt: string
+  modifiedAt: string
 }
 
-// 搜索初始化请求
-export interface InitSearchRequest {
-  map_id: string
-  algorithm: PathfindingAlgorithm
+interface ApiResponse<T = any> {
+  code: number
+  data?: T
+  message?: string
 }
 
-// 算法对比结果
-export interface AlgorithmComparison {
-  map_id: string
-  results: {
-    dfs: SearchResult
-    bfs: SearchResult
-    astar: SearchResult
-  }
-  recommendation: string
-}
-
-/**
- * 寻路算法 API 服务类
- */
 export class WayfindService {
   private baseUrl: string
 
@@ -97,112 +76,112 @@ export class WayfindService {
     this.baseUrl = baseUrl || API_CONFIG.wayfind.baseUrl
   }
 
-  /**
-   * 创建新地图
-   */
-  async createMap(request: CreateMapRequest): Promise<{ success: boolean; map_id?: string; map_data?: MapData }> {
-    const url = buildUrl(this.baseUrl, API_CONFIG.wayfind.endpoints.maps)
-    const response = await fetch(url, {
-      method: 'POST',
+  private async request<T>(method: string, path: string, body?: any): Promise<T> {
+    const data = body ? JSON.stringify(body) : undefined
+    const req = new Request(`${this.baseUrl}${path}`, {
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      body: data,
     })
-    return response.json()
+    const resp = await fetch(req)
+    const json: ApiResponse<T> = await resp.json()
+    if (json.code !== 0) {
+      throw new Error(json.message || `API Error: ${json.code}`)
+    }
+    return json.data as T
   }
 
-  /**
-   * 获取地图
-   */
-  async getMap(mapId: string): Promise<{ map_id: string; map_data: MapData }> {
-    const url = buildUrl(this.baseUrl, `${API_CONFIG.wayfind.endpoints.maps}/${mapId}`)
-    const response = await fetch(url)
-    return response.json()
+  // === 系统 ===
+  async healthCheck() {
+    return this.request<{ status: string; taskCount: number }>('GET', '/api/v1/health')
   }
 
-  /**
-   * 更新地图单元格
-   */
-  async updateCells(mapId: string, request: UpdateCellRequest): Promise<{ success: boolean; updated_count: number }> {
-    const url = buildUrl(this.baseUrl, `${API_CONFIG.wayfind.endpoints.maps}/${mapId}/cells`)
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+  async getAlgorithms() {
+    return this.request<{ algorithms: string[]; default: string }>('GET', '/api/v1/algorithms')
+  }
+
+  // === 地图管理 (独立于任务) ===
+  async listMaps() {
+    return this.request<MapInfo[]>('GET', '/api/v1/maps')
+  }
+
+  async saveMap(name: string, grid: number[][], width: number, height: number) {
+    return this.request<void>('POST', `/api/v1/maps/${encodeURIComponent(name)}`, {
+      grid,
+      width,
+      height,
     })
-    return response.json()
   }
 
-  /**
-   * 初始化搜索
-   */
-  async initSearch(request: InitSearchRequest): Promise<{
-    success: boolean
-    search_id?: string
-    algorithm?: PathfindingAlgorithm
-    initialized?: boolean
-  }> {
-    const url = buildUrl(this.baseUrl, API_CONFIG.wayfind.endpoints.search)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
-    })
-    return response.json()
+  async loadMap(name: string) {
+    return this.request<{ map: MapData }>('GET', `/api/v1/maps/${encodeURIComponent(name)}`)
   }
 
-  /**
-   * 执行单步搜索
-   */
-  async stepSearch(searchId: string): Promise<SearchStep> {
-    const url = buildUrl(this.baseUrl, `${API_CONFIG.wayfind.endpoints.search}/${searchId}/step`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    return response.json()
+  async deleteMap(name: string) {
+    return this.request<void>('DELETE', `/api/v1/maps/${encodeURIComponent(name)}`)
   }
 
-  /**
-   * 执行完整搜索
-   */
-  async runSearch(searchId: string): Promise<SearchResult> {
-    const url = buildUrl(this.baseUrl, `${API_CONFIG.wayfind.endpoints.search}/${searchId}/run`)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    return response.json()
+  // === 任务管理 ===
+  async listTasks() {
+    return this.request<{ tasks: TaskInfo[]; total: number }>('GET', '/api/v1/tasks')
   }
 
-  /**
-   * 获取搜索历史
-   */
-  async getSearchHistory(searchId: string): Promise<{
-    search_id: string
-    algorithm: PathfindingAlgorithm
-    total_steps: number
-    history: SearchStep[]
-  }> {
-    const url = buildUrl(this.baseUrl, `${API_CONFIG.wayfind.endpoints.search}/${searchId}/history`)
-    const response = await fetch(url)
-    return response.json()
+  async createTask(width: number, height: number, name: string, mapName?: string) {
+    return this.request<TaskInfo>('POST', '/api/v1/tasks', { width, height, name, mapName })
   }
 
-  /**
-   * 算法对比
-   */
-  async compareAlgorithms(mapId: string): Promise<AlgorithmComparison> {
-    const url = buildUrl(this.baseUrl, API_CONFIG.wayfind.endpoints.compare)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ map_id: mapId })
-    })
-    return response.json()
+  async getTask(taskId: string) {
+    return this.request<{ task: TaskInfo; map: MapData }>('GET', `/api/v1/tasks/${taskId}`)
+  }
+
+  async deleteTask(taskId: string) {
+    return this.request<void>('DELETE', `/api/v1/tasks/${taskId}`)
+  }
+
+  // === 搜索 ===
+  async getMap(taskId: string) {
+    return this.request<MapData>('GET', `/api/v1/map?taskId=${taskId}`)
+  }
+
+  async setCell(taskId: string, x: number, y: number, cellType: CellType) {
+    return this.request<void>('PUT', '/api/v1/map/cell', { taskId, x, y, cellType })
+  }
+
+  async getDraw(taskId: string) {
+    return this.request<{ width: number; height: number; cells: number[][] }>('GET', `/api/v1/map/draw?taskId=${taskId}`)
+  }
+
+  async getFinalDraw(taskId: string) {
+    return this.request<{ width: number; height: number; cells: number[][] }>('GET', `/api/v1/map/final-draw?taskId=${taskId}`)
+  }
+
+  async initSearch(taskId: string, algorithm: PathfindingAlgorithm) {
+    return this.request<void>('POST', '/api/v1/search/init', { taskId, algorithm })
+  }
+
+  async stepSearch(taskId: string) {
+    return this.request<{
+      step: SearchStep
+      draw: { width: number; height: number; cells: number[][] }
+      taskState: string
+    }>('POST', `/api/v1/search/step?taskId=${taskId}`)
+  }
+
+  async isSearchDone(taskId: string) {
+    return this.request<{ done: boolean; state: string }>('GET', `/api/v1/search/done?taskId=${taskId}`)
+  }
+
+  async getSearchResult(taskId: string) {
+    return this.request<{
+      result: SearchResult
+      finalDraw: { width: number; height: number; cells: number[][] }
+    }>('GET', `/api/v1/search/result?taskId=${taskId}`)
+  }
+
+  async getCurrentPath(taskId: string) {
+    return this.request<Point[]>('GET', `/api/v1/search/path?taskId=${taskId}`)
   }
 }
 
-// 导出单例
 export const wayfindService = new WayfindService()
-
 export default wayfindService

@@ -20,13 +20,16 @@ export const API_CONFIG = {
     }
   },
 
-  // 寻路算法服务
+  // 寻路算法服务 (Gin REST API)
   wayfind: {
-    baseUrl: 'http://localhost:8083',
+    baseUrl: 'http://localhost:8081',
     endpoints: {
-      maps: '/api/pathfinding/maps',
-      search: '/api/pathfinding/search',
-      compare: '/api/pathfinding/compare'
+      health: '/api/v1/health',
+      algorithms: '/api/v1/algorithms',
+      tasks: '/api/v1/tasks',
+      map: '/api/v1/map',
+      search: '/api/v1/search',
+      maps: '/api/v1/maps'
     }
   },
 

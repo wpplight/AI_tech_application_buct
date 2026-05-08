@@ -16,6 +16,7 @@ type BFSAlgorithm struct {
 	current  mappkg.Point
 	bestDist int
 	bestPath []mappkg.Point
+	Expanded int
 }
 
 func NewBFSAlgorithm() *BFSAlgorithm {
@@ -70,20 +71,25 @@ func (b *BFSAlgorithm) GetResult() *SearchResult {
 		Distance:  b.bestDist,
 		Path:      b.bestPath,
 		Algorithm: "BFS",
+		Expanded:  b.Expanded,
 	}
 }
 
 func (b *BFSAlgorithm) Step() *StepResult {
 	if b.IsDone() {
 		return &StepResult{
-			State:   b.state,
-			Current: b.m.Start,
-			Visited: b.visited,
+			State:      b.state,
+			Current:    b.m.Start,
+			Visited:    b.visited,
+			Distance:   b.bestDist,
+			StepsTaken: len(b.visited),
+			Expanded:   b.Expanded,
 		}
 	}
 
 	item := b.queue[0]
 	b.queue = b.queue[1:]
+	b.Expanded++
 	current := item.Point
 	currentStep := item.Step
 	b.current = current
@@ -96,6 +102,7 @@ func (b *BFSAlgorithm) Step() *StepResult {
 			Visited:    b.visited,
 			Distance:   b.bestDist,
 			StepsTaken: len(b.visited),
+			Expanded:   b.Expanded,
 		}
 	}
 
@@ -112,6 +119,7 @@ func (b *BFSAlgorithm) Step() *StepResult {
 			Visited:    b.visited,
 			Distance:   b.bestDist,
 			StepsTaken: len(b.visited),
+			Expanded:   b.Expanded,
 		}
 	}
 
@@ -138,6 +146,7 @@ func (b *BFSAlgorithm) Step() *StepResult {
 		Visited:    b.visited,
 		Distance:   b.bestDist,
 		StepsTaken: len(b.visited),
+		Expanded:   b.Expanded,
 	}
 }
 

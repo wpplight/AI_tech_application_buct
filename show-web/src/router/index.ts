@@ -11,7 +11,35 @@ const router = createRouter({
     {
       path: '/wayfind',
       name: 'wayfind',
-      component: () => import('../views/WayFindView.vue')
+      redirect: '/wayfind/maps',
+      component: () => import('../views/WayFindView.vue'),
+      children: [
+        {
+          path: 'maps',
+          name: 'wayfind-maps',
+          component: () => import('../views/WayFindMaps.vue')
+        },
+        {
+          path: 'maps/edit',
+          name: 'wayfind-map-edit',
+          component: () => import('../views/WayFindMapEditor.vue')
+        },
+        {
+          path: 'tasks',
+          name: 'wayfind-tasks',
+          component: () => import('../views/WayFindTasks.vue')
+        },
+        {
+          path: 'inference',
+          name: 'wayfind-inference',
+          component: () => import('../views/WayFindInference.vue')
+        },
+        {
+          path: 'inference/detail',
+          name: 'wayfind-inference-detail',
+          component: () => import('../views/WayFindInferenceDetail.vue')
+        }
+      ]
     },
     {
       path: '/professor',

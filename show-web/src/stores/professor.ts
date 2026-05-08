@@ -50,7 +50,7 @@ export const useProfessorStore = defineStore('professor', () => {
     }
   }
 
-  function addToHistory(entry: { timestamp: number; type: 'forward' | 'backward'; facts: string[]; steps: InferenceStep[]; algorithm: AlgorithmType; result?: any }) {
+  function addToHistory(entry: { timestamp: number; type: 'forward' | 'backward'; facts: string[]; steps: InferenceStep[]; algorithm: AlgorithmType; result?: any; goal?: string }) {
     const history = loadHistoryFromStorage()
     history.unshift(entry)
     const trimmed = history.slice(0, 50)
@@ -347,7 +347,6 @@ export const useProfessorStore = defineStore('professor', () => {
     setFacts,
     loadPersistedHistory,
     clearPersistedHistory,
-    storedForwardFacts,
     switchToBackward,
     switchToForward
   }

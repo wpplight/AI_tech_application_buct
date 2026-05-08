@@ -5,10 +5,10 @@ import (
 )
 
 type SearchResult struct {
-	Path      []mappkg.Point
-	Expanded  int
-	Time      int64
-	Distance  int
-	Algorithm string
-	Found     bool
+	Path      []mappkg.Point `json:"path"`
+	Expanded  int           `json:"expanded"`
+	Time      int64         `json:"time"`
+	Distance  int           `json:"distance"`
+	Algorithm string        `json:"algorithm"`
+	Found     bool          `json:"found"`
 }

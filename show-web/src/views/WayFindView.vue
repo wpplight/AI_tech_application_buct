@@ -1,748 +1,319 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useWayfindStore } from '../stores/wayfind'
-import LoadingSpinner from '../components/common/LoadingSpinner.vue'
-import ErrorMessage from '../components/common/ErrorMessage.vue'
-import StatCard from '../components/common/StatCard.vue'
-import type { PathfindingAlgorithm } from '../api/wayfind'
 
+const route = useRoute()
+const router = useRouter()
 const store = useWayfindStore()
 
-const mapWidth = ref(20)
-const mapHeight = ref(15)
-const selectedCell = ref<'road' | 'wall' | 'start' | 'end'>('wall')
+const activeTab = ref<'maps' | 'tasks' | 'inference'>('maps')
 
-const algorithms: { value: PathfindingAlgorithm; label: string; desc: string }[] = [
-  { value: 'bfs', label: 'BFS', desc: '广度优先搜索' },
-  { value: 'dfs', label: 'DFS', desc: '深度优先搜索' },
-  { value: 'astar', label: 'A*', desc: '启发式搜索' }
+const tabs = [
+  { id: 'maps', label: '地图管理', icon: 'map' },
+  { id: 'tasks', label: '任务管理', icon: 'layers' },
+  { id: 'inference', label: '寻路推导', icon: 'search' }
 ]
 
-const cellColors = {
-  0: '#27272a',
-  1: '#3f3f46',
-  2: '#10b981',
-  3: '#f43f5e'
+function syncActiveTab() {
+  const path = route.path
+  if (path.includes('/tasks')) {
+    activeTab.value = 'tasks'
+  } else if (path.includes('/inference')) {
+    activeTab.value = 'inference'
+  } else if (path.includes('/maps')) {
+    activeTab.value = 'maps'
+  }
 }
 
 onMounted(async () => {
+  syncActiveTab()
   await store.checkConnection()
   if (store.isConnected) {
-    await store.createMap(mapWidth.value, mapHeight.value)
+    await store.fetchTasks()
+    await store.fetchMaps()
   }
 })
 
-async function handleCreateMap() {
-  await store.createMap(mapWidth.value, mapHeight.value)
-}
+watch(() => route.path, syncActiveTab)
 
-async function handleCellClick(x: number, y: number) {
-  await store.updateCell(x, y, selectedCell.value)
-}
-
-async function handleInitSearch() {
-  await store.initSearch()
-}
-
-async function handleStepSearch() {
-  await store.stepSearch()
-}
-
-async function handleRunSearch() {
-  await store.runSearch()
-}
-
-function handlePauseSearch() {
-  store.pauseSearch()
-}
-
-function handleReset() {
-  store.resetSearch()
-}
-
-function getCellColor(cell: number, x: number, y: number) {
-  if (store.currentPath.some(p => p.x === x && p.y === y)) {
-    return '#3b82f6'
-  }
-  if (store.currentVisited.some(p => p.x === x && p.y === y)) {
-    return '#60a5fa'
-  }
-  return cellColors[cell as keyof typeof cellColors] || cellColors[0]
-}
-
-function handleCloseError() {
-  store.error = null
+function switchTab(tab: 'maps' | 'tasks' | 'inference') {
+  activeTab.value = tab
+  router.push(`/wayfind/${tab}`)
 }
 </script>
 
 <template>
-  <div class="wayfind-view">
-    <div class="page-header">
-      <div class="header-content">
-        <h1 class="page-title">寻路算法</h1>
-        <p class="page-subtitle">迷宫寻路可视化系统</p>
-      </div>
-      <div class="connection-status" :class="{ connected: store.isConnected }">
-        <span class="status-dot"></span>
-        {{ store.isConnected ? '已连接' : '未连接' }}
-      </div>
-    </div>
-
-    <div v-if="store.error" class="error-container">
-      <ErrorMessage :message="store.error" @close="handleCloseError" />
-    </div>
-
-    <div class="content-wrapper">
-      <div class="control-panel">
-        <div class="panel">
-          <div class="panel-section">
-            <h2 class="section-title">地图设置</h2>
-            <div class="map-settings">
-              <div class="setting-row">
-                <label class="setting-label">宽度</label>
-                <input v-model.number="mapWidth" type="number" min="5" max="50" class="setting-input" />
-              </div>
-              <div class="setting-row">
-                <label class="setting-label">高度</label>
-                <input v-model.number="mapHeight" type="number" min="5" max="50" class="setting-input" />
-              </div>
-              <button class="btn btn-primary" @click="handleCreateMap">
-                创建地图
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h2 class="section-title">算法选择</h2>
-            <div class="algorithm-selector">
-              <button
-                v-for="algo in algorithms"
-                :key="algo.value"
-                class="algo-btn"
-                :class="{ active: store.currentAlgorithm === algo.value }"
-                @click="store.setAlgorithm(algo.value)"
-              >
-                <span class="algo-label">{{ algo.label }}</span>
-                <span class="algo-desc">{{ algo.desc }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h2 class="section-title">画笔工具</h2>
-            <div class="brush-tools">
-              <button
-                v-for="(label, type) in { road: '道路', wall: '墙壁', start: '起点', end: '终点' }"
-                :key="type"
-                class="brush-btn"
-                :class="{ active: selectedCell === type }"
-                @click="selectedCell = type as any"
-              >
-                <span class="brush-preview" :style="{ background: cellColors[type === 'road' ? 0 : type === 'wall' ? 1 : type === 'start' ? 2 : 3] }"></span>
-                {{ label }}
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h2 class="section-title">搜索控制</h2>
-            <div class="search-controls">
-              <button class="btn btn-success" @click="handleInitSearch">
-                初始化
-              </button>
-              <button class="btn btn-outline" @click="handleStepSearch" :disabled="!store.searchId">
-                单步
-              </button>
-              <button class="btn btn-primary" @click="handleRunSearch" :disabled="!store.searchId">
-                {{ store.isSearching ? '运行中...' : '运行' }}
-              </button>
-              <button v-if="store.isSearching" class="btn btn-warning" @click="handlePauseSearch">
-                暂停
-              </button>
-              <button class="btn btn-outline" @click="handleReset">
-                重置
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h2 class="section-title">统计信息</h2>
-            <div class="stats-grid">
-              <StatCard label="访问节点" :value="store.visitedCount" />
-              <StatCard label="路径长度" :value="store.pathLength" unit="步" />
-              <StatCard label="执行时间" :value="store.executionTime" unit="ms" />
-            </div>
-          </div>
+  <div class="wayfind-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="sidebar-title">寻路算法</h1>
+        <div class="connection-badge" :class="{ connected: store.isConnected }">
+          <span class="connection-dot"></span>
+          <span class="connection-text">{{ store.isConnected ? '在线' : '离线' }}</span>
         </div>
       </div>
 
-      <div class="map-panel">
-        <div class="panel">
-          <div class="map-container">
-            <div v-if="store.currentMap" class="map-grid" :style="{
-              gridTemplateColumns: `repeat(${store.currentMap.width}, minmax(0, 1fr))`
-            }">
-              <div
-                v-for="(row, y) in store.currentMap.grid"
-                :key="`row-${y}`"
-                class="grid-row"
-              >
-                <div
-                  v-for="(cell, x) in row"
-                  :key="`cell-${x}-${y}`"
-                  class="grid-cell"
-                  :style="{ background: getCellColor(cell, x, y) }"
-                  @click="handleCellClick(x, y)"
-                ></div>
-              </div>
-            </div>
-            <div v-else class="map-placeholder">
-              <p>点击"创建地图"开始</p>
-            </div>
-          </div>
+      <nav class="sidebar-nav">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="nav-item"
+          :class="{ active: activeTab === tab.id }"
+          @click="switchTab(tab.id)"
+        >
+          <svg v-if="tab.icon === 'map'" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/>
+            <path d="M9 4v13"/>
+            <path d="M15 7v13"/>
+          </svg>
+          <svg v-if="tab.icon === 'layers'" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+          <svg v-if="tab.icon === 'search'" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="M21 21l-4.35-4.35"/>
+            <path d="M11 8v6"/>
+            <path d="M8 11h6"/>
+          </svg>
+          <span class="nav-label">{{ tab.label }}</span>
+        </button>
+      </nav>
 
-          <div class="map-legend">
-            <div class="legend-item">
-              <span class="legend-color" style="background: #10b981"></span>
-              起点
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background: #f43f5e"></span>
-              终点
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background: #60a5fa"></span>
-              已访问
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background: #3b82f6"></span>
-              最短路径
-            </div>
+      <div v-if="store.currentTask" class="sidebar-footer">
+        <div class="task-info-card">
+          <div class="task-info-row">
+            <span class="info-label">任务</span>
+            <span class="info-value">{{ store.currentTask.name }}</span>
+          </div>
+          <div class="task-info-row">
+            <span class="info-label">尺寸</span>
+            <span class="info-value">{{ store.currentTask.width }}×{{ store.currentTask.height }}</span>
+          </div>
+          <div class="task-info-row">
+            <span class="info-label">状态</span>
+            <span class="state-badge" :class="store.taskState">
+              {{ store.taskState === 'idle' ? '空闲' : store.taskState === 'searching' ? '搜索中' : store.taskState === 'done' ? '已完成' : '失败' }}
+            </span>
+          </div>
+          <div v-if="store.currentTask.algorithm" class="task-info-row">
+            <span class="info-label">算法</span>
+            <span class="info-value">{{ store.currentTask.algorithm.toUpperCase() }}</span>
           </div>
         </div>
       </div>
-    </div>
+    </aside>
 
-    <div v-if="store.loading" class="loading-overlay">
-      <LoadingSpinner size="lg" />
-    </div>
+    <main class="main-content">
+      <RouterView />
+    </main>
   </div>
 </template>
 
 <style scoped>
-.wayfind-view {
-  width: 100%;
+.wayfind-container {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
-.page-header {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 16px;
+.sidebar {
+  width: 280px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 24px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 100;
 }
 
-@media (min-width: 768px) {
-  .page-header {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 24px;
-    margin-bottom: 32px;
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
   }
 }
 
-.page-title {
-  font-size: 28px;
+.sidebar-header {
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-title {
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 
-@media (min-width: 768px) {
-  .page-title {
-    font-size: 36px;
-  }
-}
-
-.page-subtitle {
-  color: #a1a1aa;
-  font-size: 14px;
-}
-
-@media (min-width: 768px) {
-  .page-subtitle {
-    font-size: 16px;
-  }
-}
-
-.connection-status {
+.connection-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 6px;
+  padding: 4px 12px;
   background: rgba(244, 63, 94, 0.1);
   border: 1px solid rgba(244, 63, 94, 0.3);
-  border-radius: 20px;
+  border-radius: 16px;
   font-size: 12px;
-  color: #f43f5e;
+  color: var(--accent-red, #f43f5e);
+  transition: all 0.3s ease;
 }
 
-@media (min-width: 768px) {
-  .connection-status {
-    font-size: 13px;
-    padding: 8px 16px;
-  }
-}
-
-.connection-status.connected {
+.connection-badge.connected {
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.3);
-  color: #10b981;
+  color: var(--accent-green, #10b981);
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
+.connection-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
 }
 
-.error-container {
-  max-width: 1600px;
-  margin: 0 auto 20px;
-  padding: 0 16px;
-}
-
-@media (min-width: 768px) {
-  .error-container {
-    padding: 0 24px;
-    margin-bottom: 24px;
-  }
-}
-
-.content-wrapper {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 16px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-
-@media (min-width: 768px) {
-  .content-wrapper {
-    padding: 0 24px;
-    gap: 24px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .content-wrapper {
-    grid-template-columns: 350px 1fr;
-    padding: 0 32px;
-  }
-}
-
-.control-panel,
-.map-panel {
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
-.panel {
-  background: #18181b;
-  border: 1px solid #27272a;
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-@media (min-width: 768px) {
-  .panel {
-    border-radius: 20px;
-    padding: 24px;
+@media (max-width: 768px) {
+  .sidebar-nav {
+    flex-direction: row;
+    padding: 12px;
+    overflow-x: auto;
+    flex: none;
   }
 }
 
-.panel-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #a1a1aa;
-}
-
-@media (min-width: 768px) {
-  .section-title {
-    font-size: 16px;
-  }
-}
-
-.map-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.setting-row {
+.nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  width: 100%;
 }
 
-.setting-label {
-  flex: 1;
-  font-size: 14px;
-  color: #a1a1aa;
-}
-
-.setting-input {
-  width: 80px;
-  padding: 8px 12px;
-  background: #27272a;
-  border: 1px solid #3f3f46;
-  border-radius: 8px;
-  color: #fafafa;
-  font-size: 14px;
-}
-
-@media (min-width: 768px) {
-  .setting-input {
-    width: 100px;
+@media (max-width: 768px) {
+  .nav-item {
+    width: auto;
+    flex-shrink: 0;
     padding: 10px 14px;
-    border-radius: 10px;
   }
 }
 
-.algorithm-selector {
+.nav-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sidebar-footer {
+  padding: 16px 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.task-info-card {
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.algo-btn {
+.task-info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
-  background: #27272a;
-  border: 1px solid #3f3f46;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-}
-
-@media (min-width: 768px) {
-  .algo-btn {
-    padding: 12px 16px;
-    border-radius: 12px;
-  }
-}
-
-.algo-btn:hover {
-  border-color: #52525b;
-}
-
-.algo-btn.active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.5);
-}
-
-.algo-label {
   font-size: 13px;
-  font-weight: 600;
-  color: #fafafa;
 }
 
-@media (min-width: 768px) {
-  .algo-label {
-    font-size: 14px;
-  }
+.info-label {
+  color: var(--text-secondary);
 }
 
-.algo-desc {
-  font-size: 11px;
-  color: #a1a1aa;
-}
-
-@media (min-width: 768px) {
-  .algo-desc {
-    font-size: 12px;
-  }
-}
-
-.brush-tools {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.brush-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #27272a;
-  border: 1px solid #3f3f46;
-  border-radius: 8px;
-  color: #fafafa;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-@media (min-width: 768px) {
-  .brush-btn {
-    padding: 10px 14px;
-    font-size: 13px;
-    border-radius: 10px;
-  }
-}
-
-.brush-btn:hover {
-  border-color: #52525b;
-}
-
-.brush-btn.active {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
-}
-
-.brush-preview {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-}
-
-@media (min-width: 768px) {
-  .brush-preview {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
-  }
-}
-
-.search-controls {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.btn {
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 13px;
+.info-value {
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  color: var(--text-primary);
 }
 
-@media (min-width: 768px) {
-  .btn {
-    padding: 10px 16px;
-    font-size: 14px;
-    gap: 8px;
-  }
+.state-badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.state-badge.idle {
+  background: rgba(161, 161, 170, 0.15);
+  color: var(--text-secondary);
 }
 
-.btn-primary {
-  background: #3b82f6;
-  color: white;
+.state-badge.searching {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-blue);
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+.state-badge.done {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-green);
 }
 
-.btn-success {
-  background: #10b981;
-  color: white;
+.state-badge.failed {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-red);
 }
 
-.btn-success:hover:not(:disabled) {
-  background: #059669;
-}
-
-.btn-warning {
-  background: #f59e0b;
-  color: white;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1px solid #3f3f46;
-  color: #a1a1aa;
-}
-
-.btn-outline:hover:not(:disabled) {
-  border-color: #52525b;
-  color: #fafafa;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-@media (min-width: 768px) {
-  .stats-grid {
-    gap: 12px;
-  }
-}
-
-.map-container {
+.main-content {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #0f0f11;
-  border-radius: 12px;
-  padding: 16px;
-  min-height: 300px;
+  margin-left: 280px;
+  min-height: 100vh;
+  padding: 24px;
 }
 
-@media (min-width: 768px) {
-  .map-container {
-    min-height: 400px;
-    padding: 24px;
-    border-radius: 16px;
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: 16px;
   }
-}
-
-.map-grid {
-  display: grid;
-  gap: 2px;
-  width: 100%;
-  max-width: 100%;
-  aspect-ratio: auto;
-}
-
-.grid-row {
-  display: contents;
-}
-
-.grid-cell {
-  aspect-ratio: 1;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s;
-  min-width: 12px;
-  min-height: 12px;
-}
-
-@media (min-width: 768px) {
-  .grid-cell {
-    min-width: 16px;
-    min-height: 16px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .grid-cell {
-    min-width: 20px;
-    min-height: 20px;
-  }
-}
-
-.grid-cell:hover {
-  transform: scale(1.1);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
-  z-index: 1;
-}
-
-.map-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #52525b;
-  font-size: 14px;
-}
-
-@media (min-width: 768px) {
-  .map-placeholder {
-    font-size: 16px;
-  }
-}
-
-.map-legend {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #27272a;
-  margin-top: 16px;
-}
-
-@media (min-width: 768px) {
-  .map-legend {
-    gap: 24px;
-    padding-top: 20px;
-    margin-top: 20px;
-  }
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #a1a1aa;
-}
-
-@media (min-width: 768px) {
-  .legend-item {
-    font-size: 13px;
-  }
-}
-
-.legend-color {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-}
-
-@media (min-width: 768px) {
-  .legend-color {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(9, 9, 11, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
 }
 </style>

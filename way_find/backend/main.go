@@ -1,35 +1,29 @@
 package main
 
 import (
-	"embed"
+	"flag"
 	"log"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
+	"os"
+	"path/filepath"
 )
 
-//go:embed frontend/dist
-var assets embed.FS
-
 func main() {
-	app := application.New(application.Options{
-		Name: "WayFind",
-		Services: []application.Service{
-			application.NewService(NewWayFindService()),
-		},
-		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
-		},
-	})
+	port := flag.String("port", "8081", "server port")
+	flag.Parse()
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "WayFind - Pathfinding Visualizer",
-		Width:            1280,
-		Height:           800,
-		BackgroundColour: application.NewRGB(15, 20, 25),
-	})
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		homeDir = "."
+	}
+	storagePath := filepath.Join(homeDir, "Documents", "WayFind", "maps")
 
-	err := app.Run()
-	if err != nil {
-		log.Fatal("Error running application:", err)
+	taskMgr := NewTaskManager(storagePath)
+	router := NewRouter(taskMgr)
+
+	log.Printf("WayFind API server starting on :%s", *port)
+	log.Printf("API docs: http://localhost:%s/api/v1/health", *port)
+
+	if err := router.Run(":" + *port); err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
 }

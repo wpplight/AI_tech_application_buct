@@ -48,6 +48,7 @@ type AStarAlgorithm struct {
 	current  mappkg.Point
 	bestDist int
 	bestPath []mappkg.Point
+	Expanded int
 }
 
 func NewAStarAlgorithm() *AStarAlgorithm {
@@ -105,19 +106,24 @@ func (a *AStarAlgorithm) GetResult() *SearchResult {
 		Distance:  a.bestDist,
 		Path:      a.bestPath,
 		Algorithm: "A*",
+		Expanded:  a.Expanded,
 	}
 }
 
 func (a *AStarAlgorithm) Step() *StepResult {
 	if a.IsDone() {
 		return &StepResult{
-			State:   a.state,
-			Current: a.m.Start,
-			Visited: a.visited,
+			State:      a.state,
+			Current:    a.m.Start,
+			Visited:    a.visited,
+			Distance:   a.bestDist,
+			StepsTaken: len(a.visited),
+			Expanded:   a.Expanded,
 		}
 	}
 
 	item := heap.Pop(&a.heap).(AStarItem)
+	a.Expanded++
 	current := item.Point
 	currentG := item.G
 	a.current = current
@@ -130,6 +136,7 @@ func (a *AStarAlgorithm) Step() *StepResult {
 			Visited:    a.visited,
 			Distance:   a.bestDist,
 			StepsTaken: len(a.visited),
+			Expanded:   a.Expanded,
 		}
 	}
 
@@ -144,6 +151,7 @@ func (a *AStarAlgorithm) Step() *StepResult {
 			Visited:    a.visited,
 			Distance:   a.bestDist,
 			StepsTaken: len(a.visited),
+			Expanded:   a.Expanded,
 		}
 	}
 
@@ -172,6 +180,7 @@ func (a *AStarAlgorithm) Step() *StepResult {
 		Visited:    a.visited,
 		Distance:   a.bestDist,
 		StepsTaken: len(a.visited),
+		Expanded:   a.Expanded,
 	}
 }
 

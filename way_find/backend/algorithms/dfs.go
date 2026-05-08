@@ -21,6 +21,7 @@ type DFSAlgorithm struct {
 	bestDist   int
 	bestPath   []mappkg.Point
 	parentSnap [][]mappkg.Point
+	Expanded   int
 }
 
 func NewDFSAlgorithm() *DFSAlgorithm {
@@ -76,20 +77,25 @@ func (d *DFSAlgorithm) GetResult() *SearchResult {
 		Distance:  d.bestDist,
 		Path:      d.bestPath,
 		Algorithm: "DFS",
+		Expanded:  d.Expanded,
 	}
 }
 
 func (d *DFSAlgorithm) Step() *StepResult {
 	if d.IsDone() {
 		return &StepResult{
-			State:   d.state,
-			Current: d.m.Start,
-			Visited: d.visited,
+			State:      d.state,
+			Current:    d.m.Start,
+			Visited:    d.visited,
+			Distance:   d.bestDist,
+			StepsTaken: len(d.visited),
+			Expanded:   d.Expanded,
 		}
 	}
 
 	item := d.stack[len(d.stack)-1]
 	d.stack = d.stack[:len(d.stack)-1]
+	d.Expanded++
 	current := item.Point
 	currentStep := item.Step
 	d.current = current
@@ -104,6 +110,7 @@ func (d *DFSAlgorithm) Step() *StepResult {
 			Visited:    d.visited,
 			Distance:   d.bestDist,
 			StepsTaken: len(d.visited),
+			Expanded:   d.Expanded,
 		}
 	}
 
@@ -122,6 +129,7 @@ func (d *DFSAlgorithm) Step() *StepResult {
 			Visited:    d.visited,
 			Distance:   d.bestDist,
 			StepsTaken: len(d.visited),
+			Expanded:   d.Expanded,
 		}
 	}
 
@@ -148,6 +156,7 @@ func (d *DFSAlgorithm) Step() *StepResult {
 		Visited:    d.visited,
 		Distance:   d.bestDist,
 		StepsTaken: len(d.visited),
+		Expanded:   d.Expanded,
 	}
 }
 
