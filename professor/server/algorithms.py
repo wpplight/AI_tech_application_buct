@@ -197,20 +197,11 @@ class AlgorithmEngine:
         self.fb = FullScanFB()
         self.engine = FullScanEngine(self.kb, self.fb)
 
-        from fullscan_py.knowledge_base import DB_PATH as _DB
-        from fullscan_py.web_server import load_wikipedia_rules
-        if self.kb.is_empty():
-            load_wikipedia_rules()
-
     def _init_incremental(self):
         """初始化增量触发算法"""
         self.kb = IncrementalKB()
         self.fb = IncrementalFB()
         self.engine = IncrementalEngine(self.kb, self.fb)
-
-        from incremental_py.web_server import load_wikipedia_rules
-        if self.kb.is_empty():
-            load_wikipedia_rules()
 
     def _init_rete(self):
         """初始化Rete网络算法"""
