@@ -1,4 +1,9 @@
 dist/
 node_modules/
 __pycache__/
+*.pyc
+*.pyo
 .pids/
+*.pid
+wayfind-api
+way_find/backend/wayfind-api
