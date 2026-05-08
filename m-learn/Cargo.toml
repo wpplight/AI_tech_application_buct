@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/optim",
+    "crates/tensor",
+    "crates/draw",
+    "crates/formula",
+    "crates/nn",
+    "crates/genetic",
+    "example/tensor-example",
+    "example/draw-example",
+    "example/formula-draw-example",
+    "example/regression-example",
+    "example/genetic-example",
+
+    # 未来将添加更多包：
+    # "crates/autograd",
+    # "crates/datasets",
+    # "crates/utils",
+    ]
+
+[workspace.dependencies]
+tensor = { path = "./crates/tensor" }
+optim = { path = "./crates/optim" }
+draw = { path = "./crates/draw" }
+formula = { path = "./crates/formula" }
+nn = { path = "./crates/nn" }
+genetic = { path = "./crates/genetic" }
+
+

@@ -1,0 +1,9 @@
+[package]
+name = "genetic-example"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+genetic = { path = "../../crates/genetic" }
+draw = { path = "../../crates/draw" }
+tensor = { path = "../../crates/tensor" }

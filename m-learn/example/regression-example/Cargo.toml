@@ -1,0 +1,10 @@
+[package]
+name = "regression-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nn = { path = "../../crates/nn" }
+tensor = { path = "../../crates/tensor" }
+draw = { path = "../../crates/draw" }
+rand = "0.9"

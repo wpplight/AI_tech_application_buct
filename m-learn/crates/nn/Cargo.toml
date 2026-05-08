@@ -1,0 +1,8 @@
+[package]
+name = "nn"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tensor = { path = "../tensor" }
+rand = "0.9"
