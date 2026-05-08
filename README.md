@@ -2,19 +2,26 @@
 
 一个综合性的 AI 算法可视化与演示平台，包含专家系统、寻路算法和机器学习三大模块。
 
-## 项目结构
+## 快速开始
 
+```bash
+# 启动所有服务（一键）
+make start
+
+# 查看服务状态
+make status
+
+# 停止所有服务
+make stop
 ```
-AI_tech_application_buct/
-├── professor/          # 专家系统 - 动物识别
-├── show-web/          # 前端可视化界面 (Vue 3)
-├── way_find/          # 寻路算法可视化
-└── m-learn/          # Rust 机器学习库
-```
 
-## 模块介绍
+访问 `http://localhost:5173`
 
-### 1. 专家系统 (professor/)
+## 系统预览
+
+### 1. 专家系统 - 动物识别
+
+![专家系统](assest/professor.png)
 
 基于 Python 的动物识别专家系统，实现了三种前向推理算法：
 
@@ -22,9 +29,11 @@ AI_tech_application_buct/
 - **增量触发 (Incremental Triggering)** - 仅触发相关规则
 - **Rete 网络** - 基于 Rete 算法的高效模式匹配
 
-**技术栈：** Python + Flask + SQLite + Vue 3
+**技术栈：** Python + SQLite + Vue 3
 
-### 2. 寻路算法 (way_find/)
+### 2. 寻路算法可视化
+
+![寻路算法](assest/wayfind.png)
 
 迷宫寻路可视化系统，支持多种搜索算法：
 
@@ -51,17 +60,34 @@ Rust 实现的机器学习基础库：
 
 **技术栈：** Rust + Cargo
 
-## 快速开始
+## 项目结构
 
-### 前端 (show-web)
+```
+AI_tech_application_buct/
+├── professor/          # 专家系统 - 动物识别
+├── show-web/          # 前端可视化界面 (Vue 3)
+├── way_find/          # 寻路算法可视化
+├── m-learn/           # Rust 机器学习库
+└── Makefile          # 服务管理
+```
+
+## 服务端口
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| show-web | 5173 | 前端界面 |
+| way_find | 8081 | 寻路算法 API |
+| professor | 8080 | 专家系统 API |
+
+## 手动启动（备选）
+
+### 前端
 
 ```bash
 cd show-web
 npm install
 npm run dev
 ```
-
-访问 `http://localhost:5173`
 
 ### 寻路算法后端
 
@@ -75,22 +101,5 @@ go build -o wayfind-api .
 
 ```bash
 cd professor
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
+python3 server/unified_server.py
 ```
-
-### 机器学习库
-
-```bash
-cd m-learn
-cargo build --release
-```
-
-## 技术特性
-
-- **专家系统**：前向/反向推理、知识库持久化、性能对比实验
-- **寻路算法**：任务隔离、逐步执行、速度控制、实时统计
-- **前端界面**：Vue 3 + TypeScript + Pinia + 组件化设计
-- **后端架构**：RESTful API、微服务风格、分层设计
