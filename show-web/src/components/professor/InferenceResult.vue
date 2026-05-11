@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { InferenceStep } from '../../api/professor'
+import { ref, computed } from 'vue'
+import type { InferenceStep, AlgorithmType, ReteTraceEvent, ReteTopology } from '../../api/professor'
+import ReteTraceVisualizer from './ReteTraceVisualizer.vue'
+import InferenceProcessVisualizer from './InferenceProcessVisualizer.vue'
 
 const props = defineProps<{
   steps: InferenceStep[]
@@ -9,9 +12,31 @@ const props = defineProps<{
   success?: boolean
   goal?: string
   cacheHit?: boolean
+  algorithm?: AlgorithmType
+  newFacts?: string[]
+  allFacts?: string[]
+  reteTrace?: ReteTraceEvent[]
+  networkTopology?: ReteTopology | null
 }>()
 
-  const isBackward = props.inputFacts !== undefined && props.goal !== undefined
+const activeView = ref<'steps' | 'process' | 'rete'>('steps')
+
+const isBackward = computed(() => props.inputFacts !== undefined && props.goal !== undefined)
+const isRete = computed(() => props.algorithm === 'rete')
+const hasTrace = computed(() => (props.reteTrace?.length ?? 0) > 0)
+
+const viewTabs = computed(() => {
+  const tabs: Array<{ id: 'steps' | 'process' | 'rete'; label: string }> = [
+    { id: 'steps', label: '推理步骤' }
+  ]
+  if (!isBackward.value && props.steps.length > 0) {
+    tabs.push({ id: 'process', label: '过程可视化' })
+  }
+  if (isRete.value && hasTrace.value) {
+    tabs.push({ id: 'rete', label: 'Rete 网络' })
+  }
+  return tabs
+})
 </script>
 
 <template>
@@ -61,86 +86,117 @@ const props = defineProps<{
       </div>
     </div>
 
-    <div v-if="steps.length > 0" class="steps-list">
-      <div class="steps-label">推理步骤</div>
-      <div
-        v-for="(step, index) in steps"
-        :key="index"
-        class="step-item"
-        :class="step.type"
+    <div v-if="steps.length > 0 || hasTrace" class="view-tabs">
+      <button
+        v-for="tab in viewTabs"
+        :key="tab.id"
+        class="view-tab"
+        :class="{ active: activeView === tab.id }"
+        @click="activeView = tab.id"
       >
-        <div class="step-badge">{{ index + 1 }}</div>
-        <div class="step-content">
-          <div class="step-type">{{ step.type === 'forward' ? '正向推理' : '反向推理' }}</div>
+        {{ tab.label }}
+      </button>
+    </div>
 
-          <div v-if="step.type === 'forward' && step.new_fact" class="inference-flow">
-            <span v-for="(cond, idx) in step.rule_conditions" :key="idx" class="cond">
-              {{ cond }}
-            </span>
-            <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="5" y1="12" x2="19" y2="12"/>
-              <polyline points="12 5 19 12 12 19"/>
-            </svg>
-            <span class="result">{{ step.new_fact }}</span>
-          </div>
+    <div v-if="activeView === 'steps'" class="view-content">
+      <div v-if="steps.length > 0" class="steps-list">
+        <div class="steps-label">推理步骤</div>
+        <div
+          v-for="(step, index) in steps"
+          :key="index"
+          class="step-item"
+          :class="step.type"
+        >
+          <div class="step-badge">{{ index + 1 }}</div>
+          <div class="step-content">
+            <div class="step-type">{{ step.type === 'forward' ? '正向推理' : '反向推理' }}</div>
 
-          <div v-else-if="step.type === 'backward'" class="backward-step">
-            <div class="backward-goal-row">
-              <span class="backward-goal-label">目标</span>
-              <span class="backward-goal">{{ step.goal }}</span>
+            <div v-if="step.type === 'forward' && step.new_fact" class="inference-flow">
+              <span v-for="(cond, idx) in step.rule_conditions" :key="idx" class="cond">
+                {{ cond }}
+              </span>
+              <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+              <span class="result">{{ step.new_fact }}</span>
             </div>
 
-            <template v-if="step.rule_id">
-              <div class="rule-attempt">
-                <span class="rule-label">尝试规则 #{{ step.rule_id }}</span>
-                <div class="rule-conditions-row">
-                  <span
-                    v-for="(cond, idx) in step.rule_conditions"
-                    :key="idx"
-                    class="cond-tag"
-                  >{{ cond }}</span>
-                  <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                    <polyline points="12 5 19 12 12 19"/>
-                  </svg>
-                  <span class="conclusion-tag">{{ step.rule_conclusion || step.goal }}</span>
-                </div>
+            <div v-else-if="step.type === 'backward'" class="backward-step">
+              <div class="backward-goal-row">
+                <span class="backward-goal-label">目标</span>
+                <span class="backward-goal">{{ step.goal }}</span>
               </div>
-            </template>
 
-            <div v-if="step.result" class="backward-result" :class="{
-              success: step.result === '已知事实' || step.result === '推理成功',
-              fail: step.result === '规则条件不满足' || step.result === '推理失败',
-              loop: step.result.includes('循环')
-            }">
-              <span v-if="step.result === '已知事实'">✓ 已知事实，推理成功</span>
-              <span v-else-if="step.result === '推理成功'">✓ 推理成功</span>
-              <span v-else-if="step.result === '循环依赖，跳过'">⚠ 循环依赖，跳过</span>
-              <span v-else-if="step.result === '规则条件不满足'">✗ 规则条件不满足</span>
-              <span v-else>{{ step.result }}</span>
+              <template v-if="step.rule_id">
+                <div class="rule-attempt">
+                  <span class="rule-label">尝试规则 #{{ step.rule_id }}</span>
+                  <div class="rule-conditions-row">
+                    <span
+                      v-for="(cond, idx) in step.rule_conditions"
+                      :key="idx"
+                      class="cond-tag"
+                    >{{ cond }}</span>
+                    <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                      <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                    <span class="conclusion-tag">{{ step.rule_conclusion || step.goal }}</span>
+                  </div>
+                </div>
+              </template>
+
+              <div v-if="step.result" class="backward-result" :class="{
+                success: step.result === '已知事实' || step.result === '推理成功',
+                fail: step.result === '规则条件不满足' || step.result === '推理失败',
+                loop: step.result.includes('循环')
+              }">
+                <span v-if="step.result === '已知事实'">✓ 已知事实，推理成功</span>
+                <span v-else-if="step.result === '推理成功'">✓ 推理成功</span>
+                <span v-else-if="step.result === '循环依赖，跳过'">⚠ 循环依赖，跳过</span>
+                <span v-else-if="step.result === '规则条件不满足'">✗ 规则条件不满足</span>
+                <span v-else>{{ step.result }}</span>
+              </div>
+
+              <div v-if="step.conditions && step.conditions.length" class="need-facts">
+                <span class="need-label">需要满足：</span>
+                <span
+                  v-for="(cond, idx) in step.conditions"
+                  :key="idx"
+                  class="cond-tag need"
+                >{{ cond }}</span>
+              </div>
             </div>
 
-            <div v-if="step.conditions && step.conditions.length" class="need-facts">
-              <span class="need-label">需要满足：</span>
-              <span
-                v-for="(cond, idx) in step.conditions"
-                :key="idx"
-                class="cond-tag need"
-              >{{ cond }}</span>
-            </div>
+            <div v-if="step.rule_id" class="step-meta">规则 #{{ step.rule_id }}</div>
           </div>
-
-          <div v-if="step.rule_id" class="step-meta">规则 #{{ step.rule_id }}</div>
         </div>
+      </div>
+
+      <div v-else-if="!isBackward" class="empty-result">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+        <p>执行推理查看结果</p>
       </div>
     </div>
 
-    <div v-else-if="!isBackward" class="empty-result">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M12 6v6l4 2"/>
-      </svg>
-      <p>执行推理查看结果</p>
+    <div v-if="activeView === 'process' && !isBackward" class="view-content">
+      <InferenceProcessVisualizer
+        :steps="steps"
+        :input-facts="inputFacts || []"
+        :new-facts="newFacts || []"
+        :all-facts="allFacts || []"
+        :algorithm="algorithm || 'fullscan'"
+      />
+    </div>
+
+    <div v-if="activeView === 'rete' && isRete" class="view-content">
+      <ReteTraceVisualizer
+        :trace="reteTrace || []"
+        :topology="networkTopology || null"
+      />
     </div>
   </div>
 </template>
@@ -171,6 +227,48 @@ const props = defineProps<{
   gap: 8px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.view-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.view-tab {
+  flex: 1;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.view-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.view-tab.active {
+  background: var(--accent-blue);
+  color: white;
+}
+
+.view-content {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .backward-step {
@@ -436,13 +534,6 @@ const props = defineProps<{
   border-radius: 6px;
   font-size: 12px;
   color: var(--text-secondary);
-}
-
-.arrow {
-  width: 14px;
-  height: 14px;
-  color: var(--text-muted);
-  flex-shrink: 0;
 }
 
 .result {

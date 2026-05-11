@@ -71,6 +71,12 @@ function handlePageChange(page: number) {
 function handleSearchInput() {
   showDropdown.value = filteredFacts.value.length > 0 && filteredFacts.value.length < allFacts.value.length
 }
+
+function handleBlur() {
+  setTimeout(() => {
+    showDropdown.value = false
+  }, 150)
+}
 </script>
 
 <template>
@@ -88,7 +94,7 @@ function handleSearchInput() {
           placeholder="搜索事实..."
           @input="handleSearchInput"
           @focus="showDropdown = filteredFacts.length > 0 && filteredFacts.length < allFacts.length"
-          @blur="setTimeout(() => { showDropdown = false }, 150)"
+          @blur="handleBlur"
         />
       </div>
 

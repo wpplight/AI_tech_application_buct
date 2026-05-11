@@ -1,4 +1,4 @@
-.PHONY: help start start-all start-unified start-fullscan start-incremental start-rete stop status check health clean
+.PHONY: help start start-all start-unified start-fullscan start-incremental start-rete start-frontend stop status check health clean
 
 # 定义颜色输出
 GREEN  := \033[32m
@@ -21,6 +21,8 @@ FULLSCAN_DIR     := fullscan_py
 INCREMENTAL_DIR  := incremental_py
 RETE_DIR         := rete_py
 SERVER_DIR       := server
+FRONTEND_DIR     := ../show-web
+FRONTEND_PORT    := 5173
 
 # PID 文件目录
 PID_DIR := .pids
@@ -29,8 +31,9 @@ help:
 	@echo "$(BLUE)动物识别专家系统 - 服务器管理工具$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)统一服务器（推荐）：$(RESET)"
-	@echo "  make start              $(GREEN)# 启动统一服务器 (端口 8080)$(RESET)"
-	@echo "  make start-unified     $(GREEN)# 同上，启动统一服务器$(RESET)"
+	@echo "  make start              $(GREEN)# 启动后端 + 前端 (端口 8080 + 5173)$(RESET)"
+	@echo "  make start-unified     $(GREEN)# 仅启动后端统一服务器 (端口 8080)$(RESET)"
+	@echo "  make start-frontend    $(GREEN)# 仅启动前端开发服务器 (端口 5173)$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)独立服务器（不推荐）：$(RESET)"
 	@echo "  make start-all         $(GREEN)# 启动所有独立服务器 (端口 8081-8083)$(RESET)"
@@ -58,7 +61,11 @@ help:
 
 # ==================== 统一服务器 ====================
 
-start: start-unified
+start: start-unified start-frontend
+	@echo ""
+	@echo "$(GREEN)✓ 所有服务已启动！$(RESET)"
+	@echo "$(BLUE)后端: http://localhost:$(UNIFIED_PORT)$(RESET)"
+	@echo "$(BLUE)前端: http://localhost:$(FRONTEND_PORT)$(RESET)"
 
 start-unified:
 	@if lsof -Pi :$(UNIFIED_PORT) -sTCP:LISTEN -t >/dev/null 2>&1; then \
@@ -74,6 +81,23 @@ start-unified:
 			echo "$(BLUE)使用 ?algo=<algorithm> 参数切换算法$(RESET)"; \
 		else \
 			echo "$(RED)✗ 统一服务器启动失败，请检查日志 $(PID_DIR)/unified.log$(RESET)"; \
+		fi \
+	fi
+
+# ==================== 前端服务器 ====================
+
+start-frontend:
+	@if lsof -Pi :$(FRONTEND_PORT) -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		echo "$(YELLOW)⚠ 前端服务器已在运行 (端口 $(FRONTEND_PORT))$(RESET)"; \
+	else \
+		mkdir -p $(PID_DIR); \
+		cd $(FRONTEND_DIR) && nohup npm run dev > ../professor/$(PID_DIR)/frontend.log 2>&1 & \
+		echo $$! > $(PID_DIR)/frontend.pid; \
+		sleep 3; \
+		if lsof -Pi :$(FRONTEND_PORT) -sTCP:LISTEN -t >/dev/null 2>&1; then \
+			echo "$(GREEN)✓ 前端服务器已启动 (端口 $(FRONTEND_PORT))$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ 前端服务器可能需要更长时间启动，请检查日志 $(PID_DIR)/frontend.log$(RESET)"; \
 		fi \
 	fi
 
@@ -138,7 +162,7 @@ start-rete:
 
 stop:
 	@echo "$(YELLOW)正在停止服务器...$(RESET)"
-	@for service in unified fullscan incremental rete; do \
+	@for service in unified fullscan incremental rete frontend; do \
 		if [ -f $(PID_DIR)/$$service.pid ]; then \
 			pid=$$(cat $(PID_DIR)/$$service.pid); \
 			if kill -0 $$pid 2>/dev/null; then \
@@ -189,6 +213,15 @@ status:
 		fi; \
 		printf "│ %-15s │ %-9s │ %-12s │\n" "$$algo" "$$port" "$$status"; \
 	done
+	@echo "└─────────────────┴───────────┴──────────────┘"
+	@echo ""
+	@echo "$(BLUE)前端服务器：$(RESET)"
+	@echo "┌─────────────────┬───────────┬──────────────┐"
+	@if lsof -Pi :$(FRONTEND_PORT) -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		printf "│ %-15s │ %-9s │ $(GREEN)● 运行中$(RESET)   │\n" "Vue前端" "$(FRONTEND_PORT)"; \
+	else \
+		printf "│ %-15s │ %-9s │ $(RED)○ 已停止$(RESET)   │\n" "Vue前端" "$(FRONTEND_PORT)"; \
+	fi
 	@echo "└─────────────────┴───────────┴──────────────┘"
 
 health:
@@ -258,4 +291,4 @@ logs:
 restart:
 	@$(MAKE) stop
 	@sleep 1
-	@$(MAKE) start-unified
+	@$(MAKE) start

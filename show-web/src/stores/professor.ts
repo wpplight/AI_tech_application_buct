@@ -4,7 +4,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { professorService, type AlgorithmType, type Rule, type InferenceStep } from '../api/professor'
+import { professorService, type AlgorithmType, type Rule, type InferenceStep, type ReteTraceEvent, type ReteTopology } from '../api/professor'
 
 export const useProfessorStore = defineStore('professor', () => {
   // 状态
@@ -17,6 +17,8 @@ export const useProfessorStore = defineStore('professor', () => {
   const storedForwardFacts = ref<string[]>([])
   const backwardGoal = ref('')
   const currentResult = ref<any>(null)
+  const reteTrace = ref<ReteTraceEvent[]>([])
+  const networkTopology = ref<ReteTopology | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const isConnected = ref(false)
@@ -177,11 +179,17 @@ export const useProfessorStore = defineStore('professor', () => {
     try {
       loading.value = true
       error.value = null
+      reteTrace.value = []
+      networkTopology.value = null
       let result: any
       if (params?.conditionSetId) {
         result = await professorService.forwardInferenceWithConditionSet(params.conditionSetId, currentAlgorithm.value)
         currentResult.value = result
         inferenceSteps.value = result.steps || []
+        if (currentAlgorithm.value === 'rete') {
+          reteTrace.value = result.rete_trace || []
+          networkTopology.value = result.network_topology || null
+        }
         if (result.success) {
           addToHistory({
             timestamp: Date.now(),
@@ -196,6 +204,10 @@ export const useProfessorStore = defineStore('professor', () => {
         result = await professorService.forwardInferenceWithFacts(params.facts, currentAlgorithm.value)
         currentResult.value = result
         inferenceSteps.value = result.steps || []
+        if (currentAlgorithm.value === 'rete') {
+          reteTrace.value = result.rete_trace || []
+          networkTopology.value = result.network_topology || null
+        }
         if (result.success) {
           addToHistory({
             timestamp: Date.now(),
@@ -210,6 +222,10 @@ export const useProfessorStore = defineStore('professor', () => {
         result = await professorService.forwardInferenceWithFacts(facts.value, currentAlgorithm.value)
         currentResult.value = result
         inferenceSteps.value = result.steps || []
+        if (currentAlgorithm.value === 'rete') {
+          reteTrace.value = result.rete_trace || []
+          networkTopology.value = result.network_topology || null
+        }
         if (result.success) {
           await loadFacts()
           addToHistory({
@@ -321,6 +337,8 @@ export const useProfessorStore = defineStore('professor', () => {
     storedForwardFacts,
     backwardGoal,
     currentResult,
+    reteTrace,
+    networkTopology,
     loading,
     error,
     isConnected,

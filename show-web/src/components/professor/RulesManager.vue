@@ -495,19 +495,23 @@ onMounted(loadRules)
 }
 
 .btn-delete {
-  background: none;
-  border: 1px solid var(--border-color);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: 6px;
-  color: var(--text-muted);
+  color: #ef4444;
   font-size: 12px;
-  padding: 4px 10px;
+  font-weight: 500;
+  padding: 4px 12px;
   cursor: pointer;
   flex-shrink: 0;
+  transition: all 0.2s;
 }
 
 .btn-delete:hover {
-  border-color: var(--accent-red);
-  color: var(--accent-red);
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
 }
 
 .btn-delete:disabled {
