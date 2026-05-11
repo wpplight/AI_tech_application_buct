@@ -36,6 +36,46 @@ export interface InferenceStep {
   result?: string
   attempt?: string
   conditions?: string[]
+  step_index?: number
+  accumulated_facts?: string[]
+}
+
+// Rete 网络追踪事件
+export interface ReteTraceEvent {
+  type: 'alpha_activate' | 'beta_match' | 'terminal_fire'
+  condition?: string
+  fact?: string
+  children?: number
+  rule_id?: number
+  matched_facts?: string[]
+  is_chain_head?: boolean
+  combined_count?: number
+  conclusion?: string
+  conditions?: string[]
+}
+
+// Rete 网络拓扑
+export interface ReteTopology {
+  alpha_nodes: Array<{
+    condition: string
+    memory: string[]
+    children_count: number
+  }>
+  beta_nodes: Array<{
+    rule_id: number
+    condition: string
+    is_chain_head: boolean
+    completed_count: number
+    pending_count: number
+    children_count: number
+  }>
+  terminals: Array<{
+    rule_id: number
+    conclusion: string
+    conditions: string[]
+    fired: boolean
+  }>
+  stats: NetworkStats
 }
 
 // 正向推理结果
@@ -43,9 +83,13 @@ export interface ForwardInferenceResult {
   success: boolean
   new_facts: string[]
   all_facts: string[]
-  steps: any[]
+  steps: InferenceStep[]
   algorithm: AlgorithmType
-  rete_trace?: any[]
+  rete_trace?: ReteTraceEvent[]
+  network_topology?: ReteTopology
+  condition_set_id?: number
+  cache_hit?: boolean
+  input_facts?: string[]
 }
 
 // 反向推理结果
@@ -314,8 +358,17 @@ export class ProfessorService {
   /**
    * 获取 Rete 执行追踪
    */
-  async getNetworkTrace(): Promise<{ trace: any[] }> {
+  async getNetworkTrace(): Promise<{ trace: ReteTraceEvent[] }> {
     const url = buildUrl(this.baseUrl, `${API_CONFIG.professor.endpoints.network}/trace`, { algo: 'rete' })
+    const response = await fetch(url)
+    return response.json()
+  }
+
+  /**
+   * 获取 Rete 网络拓扑
+   */
+  async getNetworkTopology(): Promise<ReteTopology> {
+    const url = buildUrl(this.baseUrl, `${API_CONFIG.professor.endpoints.network}/topology`, { algo: 'rete' })
     const response = await fetch(url)
     return response.json()
   }

@@ -19,6 +19,7 @@ const csStore = useConditionSetStore()
 const activeTab = ref<'inference' | 'facts' | 'rules' | 'history' | 'conditionSets'>('inference')
 const inferenceMode = ref<'forward' | 'backward'>('forward')
 const selectedConditionSetId = ref<number | null>(null)
+const conditionPanelRef = ref<InstanceType<typeof ConditionPanel> | null>(null)
 
 const tabs: Array<{ id: typeof activeTab.value; label: string; icon: string }> = [
   { id: 'inference', label: '推理控制', icon: 'cpu' },
@@ -50,10 +51,17 @@ watch(inferenceMode, async (newMode, oldMode) => {
 })
 
 async function handleForwardInference() {
-  await store.forwardInference({
-    conditionSetId: selectedConditionSetId.value ?? undefined,
-    facts: selectedConditionSetId.value ? undefined : store.facts
-  })
+  const panel = conditionPanelRef.value
+  if (panel && panel.inputMode === 'direct' && panel.directFacts.length > 0) {
+    await store.forwardInference({
+      facts: panel.directFacts
+    })
+  } else {
+    await store.forwardInference({
+      conditionSetId: selectedConditionSetId.value ?? undefined,
+      facts: selectedConditionSetId.value ? undefined : store.facts
+    })
+  }
 }
 
 async function handleBackwardInference() {
@@ -189,6 +197,7 @@ function switchTab(tab: 'inference' | 'facts' | 'rules' | 'history' | 'condition
             </div>
 
             <ConditionPanel
+              ref="conditionPanelRef"
               :mode="inferenceMode"
               @execute="handleExecute"
             />
@@ -203,6 +212,11 @@ function switchTab(tab: 'inference' | 'facts' | 'rules' | 'history' | 'condition
               :success="store.currentResult?.success"
               :goal="store.currentResult?.goal"
               :cache-hit="store.currentResult?.cache_hit"
+              :algorithm="store.currentAlgorithm"
+              :new-facts="store.currentResult?.new_facts"
+              :all-facts="store.currentResult?.all_facts"
+              :rete-trace="store.reteTrace"
+              :network-topology="store.networkTopology"
             />
           </div>
         </div>

@@ -331,6 +331,16 @@ class UnifiedServer:
                     else:
                         self._send_error('网络追踪仅适用于 Rete 算法', 400)
 
+                elif path == '/api/network/topology':
+                    engine = self._get_engine()
+                    if engine is None:
+                        return
+                    if algo == 'rete':
+                        topo = engine.get_network_topology()
+                        self._send_json(topo)
+                    else:
+                        self._send_error('网络拓扑仅适用于 Rete 算法', 400)
+
                 elif path == '/api/algorithms':
                     stats = manager.get_all_stats()
                     self._send_json({'algorithms': stats})
@@ -412,11 +422,7 @@ class UnifiedServer:
                     elif facts_input:
                         input_facts = facts_input
                         cache_hit = False
-                        if algo == 'rete':
-                            entry = engine._rete_cache.get(condition_set_id)
-                            new_facts = engine.forward_chain(input_facts)
-                        else:
-                            new_facts = engine.forward_chain(input_facts)
+                        new_facts = engine.forward_chain(input_facts)
                         all_facts = list(set(input_facts) | set(new_facts))
                     else:
                         cache_hit = False
@@ -426,16 +432,22 @@ class UnifiedServer:
 
                     steps = engine.get_steps()
                     steps_list = []
-                    for s in steps:
-                        item = {'type': s['type']}
+                    accumulated = list(input_facts)
+                    for idx, s in enumerate(steps):
+                        item = {'type': s['type'], 'step_index': idx}
                         if s['type'] == 'forward':
                             if algo == 'rete':
                                 item['new_fact'] = s.get('new_fact', '')
+                                item['iteration'] = s.get('iteration', 0)
+                                item['accumulated_facts'] = list(accumulated)
                             else:
                                 item['rule_id'] = s['rule'].id
                                 item['new_fact'] = s['new_fact']
                                 item['rule_conditions'] = s['rule'].conditions
                                 item['rule_conclusion'] = s['rule'].conclusion
+                                item['iteration'] = s.get('iteration', 0)
+                                item['accumulated_facts'] = list(accumulated)
+                            accumulated.append(s.get('new_fact', ''))
                         elif s['type'] == 'backward':
                             item['goal'] = s.get('goal', '')
                             if s.get('rule'):
@@ -455,6 +467,7 @@ class UnifiedServer:
                     }
                     if algo == 'rete':
                         response['rete_trace'] = engine.get_network_trace()
+                        response['network_topology'] = engine.get_network_topology()
                     self._send_json(response)
 
                 elif path == '/api/inference/backward':

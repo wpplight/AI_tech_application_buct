@@ -453,6 +453,45 @@ class AlgorithmEngine:
             return trace
         return None
 
+    def get_network_topology(self):
+        """获取Rete网络拓扑结构（Rete特有）"""
+        if self.algo_type != AlgorithmType.RETE:
+            return None
+        if not self.engine.built:
+            self.engine.build_network()
+        net = self.engine.network
+        alpha_nodes = []
+        for cond, alpha in net.alpha_nodes.items():
+            alpha_nodes.append({
+                'condition': cond,
+                'memory': [str(w.fact.name) for w in alpha.memory],
+                'children_count': len(alpha.children)
+            })
+        beta_nodes = []
+        for beta in net.beta_nodes:
+            beta_nodes.append({
+                'rule_id': beta.rule_id,
+                'condition': beta.condition,
+                'is_chain_head': beta.is_chain_head,
+                'completed_count': len(beta.completed),
+                'pending_count': len(beta.pending_left),
+                'children_count': len(beta.children)
+            })
+        terminals = []
+        for t in net.terminals:
+            terminals.append({
+                'rule_id': t.rule_id,
+                'conclusion': t.conclusion,
+                'conditions': t.conditions,
+                'fired': len(t.results) > 0
+            })
+        return {
+            'alpha_nodes': alpha_nodes,
+            'beta_nodes': beta_nodes,
+            'terminals': terminals,
+            'stats': net.get_network_stats()
+        }
+
 
 class EngineManager:
     """算法引擎管理器"""
