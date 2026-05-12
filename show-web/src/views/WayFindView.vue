@@ -7,12 +7,13 @@ const route = useRoute()
 const router = useRouter()
 const store = useWayfindStore()
 
-const activeTab = ref<'maps' | 'tasks' | 'inference'>('maps')
+const activeTab = ref<'maps' | 'tasks' | 'inference' | 'algorithm'>('maps')
 
 const tabs = [
   { id: 'maps', label: '地图管理', icon: 'map' },
   { id: 'tasks', label: '任务管理', icon: 'layers' },
-  { id: 'inference', label: '寻路推导', icon: 'search' }
+  { id: 'inference', label: '寻路推导', icon: 'search' },
+  { id: 'algorithm', label: '算法讲解', icon: 'book' }
 ]
 
 function syncActiveTab() {
@@ -21,6 +22,8 @@ function syncActiveTab() {
     activeTab.value = 'tasks'
   } else if (path.includes('/inference')) {
     activeTab.value = 'inference'
+  } else if (path.includes('/algorithm')) {
+    activeTab.value = 'algorithm'
   } else if (path.includes('/maps')) {
     activeTab.value = 'maps'
   }
@@ -37,7 +40,7 @@ onMounted(async () => {
 
 watch(() => route.path, syncActiveTab)
 
-function switchTab(tab: 'maps' | 'tasks' | 'inference') {
+function switchTab(tab: 'maps' | 'tasks' | 'inference' | 'algorithm') {
   activeTab.value = tab
   router.push(`/wayfind/${tab}`)
 }
@@ -60,7 +63,7 @@ function switchTab(tab: 'maps' | 'tasks' | 'inference') {
           :key="tab.id"
           class="nav-item"
           :class="{ active: activeTab === tab.id }"
-          @click="switchTab(tab.id)"
+          @click="switchTab(tab.id as 'maps' | 'tasks' | 'inference' | 'algorithm')"
         >
           <svg v-if="tab.icon === 'map'" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z"/>
@@ -77,6 +80,11 @@ function switchTab(tab: 'maps' | 'tasks' | 'inference') {
             <path d="M21 21l-4.35-4.35"/>
             <path d="M11 8v6"/>
             <path d="M8 11h6"/>
+          </svg>
+          <svg v-if="tab.icon === 'book'" class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+            <path d="M8 7h8M8 11h5"/>
           </svg>
           <span class="nav-label">{{ tab.label }}</span>
         </button>

@@ -257,13 +257,13 @@ export const useWayfindStore = defineStore('wayfind', () => {
   async function resetSearch() {
     if (!currentTask.value) return
     try {
+      const result = await wayfindService.resetSearch(currentTask.value.taskId)
       const { task, map } = await wayfindService.getTask(currentTask.value.taskId)
       currentTask.value = task
       currentTaskMap.value = map
-      const draw = await wayfindService.getDraw(currentTask.value.taskId)
-      currentTaskDraw.value = draw.cells
       searchStep.value = null
       searchResult.value = null
+      currentTaskDraw.value = result.draw.cells
     } catch (e) {
       error.value = e instanceof Error ? e.message : '重置失败'
     }

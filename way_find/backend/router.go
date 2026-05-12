@@ -39,6 +39,7 @@ func NewRouter(taskMgr *TaskManager) *gin.Engine {
 		{
 			search.POST("/init", h.InitializeSearch)
 			search.POST("/step", h.SearchStep)
+			search.POST("/reset", h.ResetSearch)
 			search.GET("/done", h.GetSearchDone)
 			search.GET("/result", h.GetSearchResult)
 			search.GET("/path", h.GetCurrentPath)

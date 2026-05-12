@@ -38,6 +38,11 @@ const router = createRouter({
           path: 'inference/detail',
           name: 'wayfind-inference-detail',
           component: () => import('../views/WayFindInferenceDetail.vue')
+        },
+        {
+          path: 'algorithm',
+          name: 'wayfind-algorithm',
+          component: () => import('../views/WayFindAlgorithm.vue')
         }
       ]
     },

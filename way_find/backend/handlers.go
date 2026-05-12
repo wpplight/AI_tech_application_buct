@@ -267,6 +267,28 @@ func (h *Handler) GetSearchResult(c *gin.Context) {
 	})
 }
 
+func (h *Handler) ResetSearch(c *gin.Context) {
+	taskID := c.Query("taskId")
+	if taskID == "" {
+		respondError(c, 40001, "taskId 不能为空")
+		return
+	}
+
+	if err := h.taskMgr.ResetSearch(taskID); err != nil {
+		respondError(c, 40201, err.Error())
+		return
+	}
+
+	task, _ := h.taskMgr.Get(taskID)
+	draw, _ := buildDraw(task)
+
+	respondOK(c, gin.H{
+		"taskId": taskID,
+		"state":  taskStateToString(task.State),
+		"draw":   draw,
+	})
+}
+
 func (h *Handler) GetCurrentPath(c *gin.Context) {
 	taskID := c.Query("taskId")
 	if taskID == "" {

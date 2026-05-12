@@ -159,6 +159,14 @@ export class WayfindService {
     return this.request<void>('POST', '/api/v1/search/init', { taskId, algorithm })
   }
 
+  async resetSearch(taskId: string) {
+    return this.request<{
+      taskId: string
+      state: string
+      draw: { width: number; height: number; cells: number[][] }
+    }>('POST', `/api/v1/search/reset?taskId=${taskId}`)
+  }
+
   async stepSearch(taskId: string) {
     return this.request<{
       step: SearchStep

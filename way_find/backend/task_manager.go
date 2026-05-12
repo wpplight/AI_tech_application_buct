@@ -180,6 +180,18 @@ func (tm *TaskManager) GetResult(taskID string) (*algorithms.SearchResult, error
 	return task.Search.GetResult(), nil
 }
 
+func (tm *TaskManager) ResetSearch(taskID string) error {
+	task, err := tm.Get(taskID)
+	if err != nil {
+		return err
+	}
+	task.Search = nil
+	task.Algorithm = ""
+	task.State = TaskStateIdle
+	task.UpdatedAt = time.Now()
+	return nil
+}
+
 func (tm *TaskManager) List() []*Task {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()

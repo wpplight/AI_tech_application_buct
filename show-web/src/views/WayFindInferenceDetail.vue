@@ -8,7 +8,6 @@ const route = useRoute()
 const router = useRouter()
 const store = useWayfindStore()
 
-const selectedCell = ref<'road' | 'wall' | 'start' | 'end'>('wall')
 const isRunning = ref(false)
 const timer = ref<ReturnType<typeof setInterval> | null>(null)
 const speed = ref(200)
@@ -30,6 +29,7 @@ const baseColors = {
   3: '#f43f5e',
   4: '#60a5fa',
   5: '#a855f7',
+  6: '#a855f7',
 } as const
 
 type BaseColorKey = keyof typeof baseColors
@@ -46,27 +46,8 @@ function getCellColor(index: number): string {
   const cell = row[x]
   if (cell === undefined) return '#e4e4e7'
 
-  if (store.searchStep) {
-    if (store.searchStep.path?.some(p => p.x === x && p.y === y)) return '#a855f7'
-    if (store.searchStep.visited?.some(p => p.x === x && p.y === y)) return '#60a5fa'
-  }
-
   const color = baseColors[cell as BaseColorKey]
   return color ?? '#e4e4e7'
-}
-
-async function handleCellClick(index: number) {
-  if (!store.currentTask) return
-  const w = mapW.value
-  const x = index % w
-  const y = Math.floor(index / w)
-  const typeMap: Record<'road' | 'wall' | 'start' | 'end', 0 | 1 | 2 | 3> = {
-  road: 0, wall: 1, start: 2, end: 3
-}
-const typeCell = typeMap[selectedCell.value]
-if (typeCell !== undefined) {
-  await store.setCell(x, y, typeCell)
-}
 }
 
 async function handleInit() {
@@ -239,7 +220,6 @@ onUnmounted(() => {
           :key="`cell-${i - 1}`"
           class="grid-cell"
           :style="{ background: getCellColor(i - 1) }"
-          @click="handleCellClick(i - 1)"
         ></div>
       </div>
       <div v-else class="map-placeholder">
@@ -482,14 +462,8 @@ onUnmounted(() => {
 .grid-cell {
   aspect-ratio: 1;
   border-radius: 4px;
-  cursor: pointer;
   min-width: 14px;
   min-height: 14px;
-}
-
-.grid-cell:hover {
-  transform: scale(1.15);
-  z-index: 1;
 }
 
 .map-placeholder {
