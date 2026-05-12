@@ -1,236 +1,191 @@
 /**
  * 机器学习状态管理
- * 支持神经网络和遗传算法
+ * 对接 m-learn REST API (step-based training)
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { mlearnService, type NNTrainResult, type GAOptimizeResult, type ModelInfo } from '../api/mlearn'
+import {
+  checkHealth,
+  createTrain,
+  trainStep,
+  getTrainStatus,
+  stopTrain,
+  getInference,
+  type CreateTrainRequest,
+  type TrainStatusResponse,
+  type InferenceResponse,
+  type RegressionInference,
+  type Genetic1DInference,
+  type Genetic2DInference,
+  type AlgorithmType,
+  type RegressionFunction,
+  type GeneticFunction
+} from '../api/mlearn'
 
 export const useMLearnStore = defineStore('mlearn', () => {
-  // ==================== 神经网络状态 ====================
-  const nnLoading = ref(false)
-  const nnError = ref<string | null>(null)
-  const currentModel = ref<NNTrainResult | null>(null)
-  const models = ref<ModelInfo[]>([])
+  const isConnected = ref(false)
+  const currentTaskId = ref<string | null>(null)
+  const taskStatus = ref<TrainStatusResponse | null>(null)
+  const inferenceData = ref<InferenceResponse | null>(null)
+  const isTraining = ref(false)
+  const error = ref<string | null>(null)
   const lossHistory = ref<number[]>([])
 
-  // NN 配置
-  const nnConfig = ref({
-    inputDim: 1,
-    hiddenDim: 64,
-    outputDim: 1,
-    epochs: 1000,
-    learningRate: 0.01
+  const algorithm = ref<AlgorithmType>('regression')
+  const regressionFn = ref<RegressionFunction>('linear')
+  const geneticFn = ref<GeneticFunction>('ackley')
+  const learningRate = ref(0.01)
+  const noise = ref(0.1)
+  const epochsPerStep = ref(10)
+
+  const hasTask = computed(() => currentTaskId.value !== null)
+  const totalEpochs = computed(() => taskStatus.value?.total_epochs ?? 0)
+  const bestFitness = computed(() => taskStatus.value?.best_fitness ?? null)
+  const isRegression = computed(() => taskStatus.value?.algorithm === 'regression')
+  const isGenetic = computed(() => taskStatus.value?.algorithm === 'genetic')
+
+  const regressionData = computed((): RegressionInference | null => {
+    if (inferenceData.value?.type === 'Regression') return inferenceData.value
+    return null
   })
 
-  // 计算属性
-  const nnTrainingProgress = computed(() => {
-    if (!currentModel.value?.metrics?.loss_history) return 0
-    return lossHistory.value.length
+  const genetic1DData = computed((): Genetic1DInference | null => {
+    if (inferenceData.value?.type === 'Genetic1D') return inferenceData.value
+    return null
   })
 
-  const finalLoss = computed(() => {
-    if (!currentModel.value) return 0
-    return currentModel.value.final_loss
+  const genetic2DData = computed((): Genetic2DInference | null => {
+    if (inferenceData.value?.type === 'Genetic2D') return inferenceData.value
+    return null
   })
 
-  const trainingTime = computed(() => {
-    if (!currentModel.value) return 0
-    return currentModel.value.training_time_ms
-  })
-
-  // ==================== 遗传算法状态 ====================
-  const gaLoading = ref(false)
-  const gaError = ref<string | null>(null)
-  const gaResult = ref<GAOptimizeResult | null>(null)
-  const fitnessHistory = ref<number[]>([])
-  const isOptimizing = ref(false)
-
-  // GA 配置
-  const gaConfig = ref({
-    problemType: 'regression' as const,
-    benchmarkFunction: 'sphere' as const,
-    dimensions: 2,
-    bounds: [-50, 50] as [number, number],
-    populationSize: 200,
-    generations: 500,
-    crossoverType: 'sbx' as const,
-    mutationType: 'polynomial' as const,
-    eliteProtect: true
-  })
-
-  // 计算属性
-  const gaProgress = computed(() => {
-    if (!gaResult.value?.convergence?.fitness_history) return 0
-    return fitnessHistory.value.length
-  })
-
-  const bestFitness = computed(() => {
-    if (!gaResult.value) return Infinity
-    return gaResult.value.best_fitness
-  })
-
-  const bestSolution = computed(() => {
-    if (!gaResult.value) return []
-    return gaResult.value.best_solution
-  })
-
-  // ==================== 连接状态 ====================
-  const isConnected = ref(false)
-
-  // ==================== 神经网络操作 ====================
   async function checkConnection() {
-    try {
-      await mlearnService.trainNN({
-        input_dim: 1,
-        hidden_dim: 4,
-        output_dim: 1,
-        layers: ['Linear'],
-        epochs: 1,
-        learning_rate: 0.01,
-        train_data: [{ input: [0], target: [0] }]
-      })
-      isConnected.value = true
-    } catch {
-      isConnected.value = false
-    }
+    isConnected.value = await checkHealth()
   }
 
-  async function trainNN() {
+  async function createTask() {
     try {
-      nnLoading.value = true
-      nnError.value = null
+      error.value = null
+      const req: CreateTrainRequest = {
+        algorithm: algorithm.value,
+        learning_rate: learningRate.value,
+        noise: noise.value
+      }
+      if (algorithm.value === 'regression') {
+        req.regression_fn = regressionFn.value
+      } else {
+        req.genetic_fn = geneticFn.value
+      }
+      const { task_id } = await createTrain(req)
+      currentTaskId.value = task_id
       lossHistory.value = []
-
-      // 生成训练数据 (sin 函数)
-      const trainData = []
-      for (let i = 0; i < 100; i++) {
-        const x = (i / 100) * 2 * Math.PI
-        trainData.push({
-          input: [x],
-          target: [Math.sin(x)]
-        })
-      }
-
-      const result = await mlearnService.trainNN({
-        input_dim: nnConfig.value.inputDim,
-        hidden_dim: nnConfig.value.hiddenDim,
-        output_dim: nnConfig.value.outputDim,
-        layers: ['Linear', 'ReLU', 'Linear'],
-        epochs: nnConfig.value.epochs,
-        learning_rate: nnConfig.value.learningRate,
-        train_data: trainData
-      })
-
-      if (result.success) {
-        currentModel.value = result
-        lossHistory.value = result.metrics?.loss_history || []
-      }
-
-      return result
+      inferenceData.value = null
+      await fetchStatus()
     } catch (e) {
-      nnError.value = e instanceof Error ? e.message : '训练失败'
-      throw e
-    } finally {
-      nnLoading.value = false
+      error.value = e instanceof Error ? e.message : '创建任务失败'
     }
   }
 
-  async function loadModels() {
+  async function fetchStatus() {
+    if (!currentTaskId.value) return
     try {
-      const result = await mlearnService.getModels()
-      models.value = result.models || []
+      taskStatus.value = await getTrainStatus(currentTaskId.value)
     } catch (e) {
-      console.error('加载模型失败:', e)
+      error.value = e instanceof Error ? e.message : '获取状态失败'
     }
   }
 
-  function setNNConfig(config: Partial<typeof nnConfig.value>) {
-    nnConfig.value = { ...nnConfig.value, ...config }
-  }
-
-  // ==================== 遗传算法操作 ====================
-  async function optimizeGA() {
+  async function doStep() {
+    if (!currentTaskId.value) return
     try {
-      gaLoading.value = true
-      gaError.value = null
-      fitnessHistory.value = []
-      isOptimizing.value = true
-
-      const result = await mlearnService.optimizeGA({
-        problem_type: gaConfig.value.problemType,
-        objective_function: gaConfig.value.benchmarkFunction,
-        dimension: gaConfig.value.dimensions,
-        bounds: gaConfig.value.bounds,
-        population_size: gaConfig.value.populationSize,
-        generations: gaConfig.value.generations,
-        crossover_type: gaConfig.value.crossoverType,
-        mutation_type: gaConfig.value.mutationType,
-        elite_protect: gaConfig.value.eliteProtect
-      })
-
-      if (result.success) {
-        gaResult.value = result
-        fitnessHistory.value = result.convergence?.fitness_history || []
+      isTraining.value = true
+      error.value = null
+      const status = await trainStep(currentTaskId.value, epochsPerStep.value)
+      taskStatus.value = status
+      if (status.best_fitness !== null) {
+        lossHistory.value.push(status.best_fitness)
       }
-
-      return result
     } catch (e) {
-      gaError.value = e instanceof Error ? e.message : '优化失败'
-      throw e
+      error.value = e instanceof Error ? e.message : '训练失败'
     } finally {
-      gaLoading.value = false
-      isOptimizing.value = false
+      isTraining.value = false
     }
   }
 
-  function setGAConfig(config: Partial<typeof gaConfig.value>) {
-    gaConfig.value = { ...gaConfig.value, ...config }
+  async function doMultiStep(steps: number) {
+    if (!currentTaskId.value) return
+    try {
+      isTraining.value = true
+      error.value = null
+      for (let i = 0; i < steps; i++) {
+        const status = await trainStep(currentTaskId.value, epochsPerStep.value)
+        taskStatus.value = status
+        if (status.best_fitness !== null) {
+          lossHistory.value.push(status.best_fitness)
+        }
+      }
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '训练失败'
+    } finally {
+      isTraining.value = false
+    }
   }
 
-  function resetGA() {
-    gaResult.value = null
-    fitnessHistory.value = []
+  async function fetchInference() {
+    if (!currentTaskId.value) return
+    try {
+      inferenceData.value = await getInference(currentTaskId.value)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '获取推理数据失败'
+    }
   }
 
-  function resetNN() {
-    currentModel.value = null
+  async function removeTask() {
+    if (!currentTaskId.value) return
+    try {
+      await stopTrain(currentTaskId.value)
+    } catch {}
+    currentTaskId.value = null
+    taskStatus.value = null
+    inferenceData.value = null
     lossHistory.value = []
+    error.value = null
+  }
+
+  function clearError() {
+    error.value = null
   }
 
   return {
-    // 神经网络状态
-    nnLoading,
-    nnError,
-    currentModel,
-    models,
-    lossHistory,
-    nnConfig,
-    nnTrainingProgress,
-    finalLoss,
-    trainingTime,
-    trainNN,
-    loadModels,
-    setNNConfig,
-    resetNN,
-
-    // 遗传算法状态
-    gaLoading,
-    gaError,
-    gaResult,
-    fitnessHistory,
-    isOptimizing,
-    gaConfig,
-    gaProgress,
-    bestFitness,
-    bestSolution,
-    optimizeGA,
-    setGAConfig,
-    resetGA,
-
-    // 连接状态
     isConnected,
-    checkConnection
+    currentTaskId,
+    taskStatus,
+    inferenceData,
+    isTraining,
+    error,
+    lossHistory,
+    algorithm,
+    regressionFn,
+    geneticFn,
+    learningRate,
+    noise,
+    epochsPerStep,
+    hasTask,
+    totalEpochs,
+    bestFitness,
+    isRegression,
+    isGenetic,
+    regressionData,
+    genetic1DData,
+    genetic2DData,
+    checkConnection,
+    createTask,
+    fetchStatus,
+    doStep,
+    doMultiStep,
+    fetchInference,
+    removeTask,
+    clearError
   }
 })

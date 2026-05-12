@@ -11,6 +11,7 @@ members = ["crates/optim",
     "example/formula-draw-example",
     "example/regression-example",
     "example/genetic-example",
+    "example/rest-api",
 
     # 未来将添加更多包：
     # "crates/autograd",

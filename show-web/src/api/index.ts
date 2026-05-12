@@ -35,21 +35,15 @@ export const API_CONFIG = {
 
   // 机器学习服务 (神经网络 + 遗传算法)
   mlearn: {
-    baseUrl: 'http://localhost:8081',
+    baseUrl: 'http://localhost:8082',
     endpoints: {
-      nn: {
-        train: '/api/ml/nn/train',
-        predict: '/api/ml/nn/predict',
-        models: '/api/ml/nn/models'
-      },
-      ga: {
-        optimize: '/api/ml/ga/optimize',
-        status: '/api/ml/ga/status'
-      },
-      viz: {
-        plot: '/api/ml/viz/plot',
-        image: '/api/ml/viz/image'
-      }
+      health: '/health',
+      algorithms: '/algorithms',
+      train: '/train',
+      trainStep: (taskId: string) => `/train/${taskId}/step`,
+      trainStatus: (taskId: string) => `/train/${taskId}/status`,
+      trainStop: (taskId: string) => `/train/${taskId}/stop`,
+      inference: (taskId: string) => `/inference/${taskId}`
     }
   }
 } as const

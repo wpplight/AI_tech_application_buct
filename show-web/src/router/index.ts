@@ -52,10 +52,28 @@ const router = createRouter({
       component: () => import('../views/ProfessorView.vue')
     },
     {
-      path: '/mlearn',
-      name: 'mlearn',
-      component: () => import('../views/MLearnView.vue')
-    },
+        path: '/mlearn',
+        name: 'mlearn',
+        component: () => import('../views/MLearnView.vue'),
+        redirect: '/mlearn/task',
+        children: [
+          {
+            path: 'task',
+            name: 'mlearn-task',
+            component: () => import('../views/MLearnTask.vue')
+          },
+          {
+            path: 'regression',
+            name: 'mlearn-regression',
+            component: () => import('../views/MLearnRegression.vue')
+          },
+          {
+            path: 'genetic',
+            name: 'mlearn-genetic',
+            component: () => import('../views/MLearnGenetic.vue')
+          }
+        ]
+      },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
