@@ -11,11 +11,12 @@
       <nav class="sidebar-nav">
         <RouterLink class="nav-item" to="/mlearn/task">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 8v8"/>
-            <path d="M8 12h8"/>
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
           </svg>
-          <span>创建任务</span>
+          <span>任务管理</span>
         </RouterLink>
         <RouterLink class="nav-item" to="/mlearn/regression">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -35,6 +36,16 @@
           <span>遗传算法</span>
         </RouterLink>
       </nav>
+
+      <div class="sidebar-tasks" v-if="mlearn.tasks.length > 0">
+        <div class="section-label">任务列表</div>
+        <div class="task-item" v-for="task in mlearn.tasks" :key="task.id"
+          :class="{ active: task.id === mlearn.currentTaskId }"
+          @click="handleTaskClick(task)">
+          <span class="task-dot" :class="task.algorithm === 'regression' ? 'dot-blue' : 'dot-purple'"></span>
+          <span class="task-name">{{ task.label }}</span>
+        </div>
+      </div>
 
       <div class="sidebar-footer" v-if="mlearn.hasTask">
         <div class="task-info">
@@ -56,14 +67,25 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
-import { useMLearnStore } from '../stores/mlearn'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { useMLearnStore, type TaskItem } from '../stores/mlearn'
 
 const mlearn = useMLearnStore()
+const router = useRouter()
 
-onMounted(() => {
+onMounted(async () => {
   mlearn.checkConnection()
+  await mlearn.fetchTasks()
 })
+
+async function handleTaskClick(task: TaskItem) {
+  await mlearn.selectTask(task.id)
+  if (task.algorithm === 'regression') {
+    router.push('/mlearn/regression')
+  } else {
+    router.push('/mlearn/genetic')
+  }
+}
 </script>
 
 <style scoped>
@@ -115,9 +137,8 @@ onMounted(() => {
 }
 
 .sidebar-nav {
-  flex: 1;
   padding: 8px 0;
-  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
 }
 
 .nav-item {
@@ -148,6 +169,67 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+}
+
+.sidebar-tasks {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.section-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 16px 4px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.task-item:hover {
+  background: var(--bg-hover);
+}
+
+.task-item.active {
+  background: rgba(74, 144, 226, 0.06);
+  border-left-color: var(--accent-blue);
+}
+
+.task-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-blue {
+  background: var(--accent-blue);
+}
+
+.dot-purple {
+  background: #8b5cf6;
+}
+
+.task-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-item.active .task-name {
+  color: var(--accent-blue);
+  font-weight: 600;
 }
 
 .sidebar-footer {

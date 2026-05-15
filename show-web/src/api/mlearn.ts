@@ -6,6 +6,11 @@
 import { API_CONFIG } from './index'
 
 const BASE_URL = API_CONFIG.mlearn.baseUrl
+const TIMEOUT = 15000
+
+function withTimeout(init?: RequestInit): RequestInit {
+  return { ...init, signal: AbortSignal.timeout(TIMEOUT) }
+}
 
 // ==================== 类型定义 ====================
 
@@ -19,6 +24,24 @@ export interface CreateTrainRequest {
   genetic_fn?: GeneticFunction
   learning_rate?: number
   noise?: number
+  x_min?: number
+  x_max?: number
+}
+
+export interface EpochRecord {
+  epoch: number
+  train_loss: number
+  val_loss: number
+}
+
+export interface TrainingHistory {
+  task_id: string
+  records: EpochRecord[]
+}
+
+export interface RecallResponse {
+  y_true: number[]
+  y_pred: number[]
 }
 
 export interface StepRequest {
@@ -35,11 +58,10 @@ export interface TrainStatusResponse {
 
 export interface RegressionInference {
   type: 'Regression'
-  x_data: number[]
-  y_data: number[]
   x_curve: number[]
   y_curve: number[]
-  loss: number
+  x_min: number
+  x_max: number
 }
 
 export interface Genetic1DInference {
@@ -62,6 +84,20 @@ export interface Genetic2DInference {
 
 export type InferenceResponse = RegressionInference | Genetic1DInference | Genetic2DInference
 
+export interface TaskListItem {
+  task_id: string
+  algorithm: AlgorithmType
+  regression_fn: RegressionFunction | null
+  genetic_fn: GeneticFunction | null
+  total_epochs: number
+  best_fitness: number | null
+  created_at: number
+}
+
+export interface TaskListResponse {
+  tasks: TaskListItem[]
+}
+
 // ==================== API 函数 ====================
 
 export async function checkHealth(): Promise<boolean> {
@@ -74,43 +110,61 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 export async function getAlgorithms(): Promise<{ regression: string[], genetic: string[] }> {
-  const resp = await fetch(`${BASE_URL}/algorithms`)
+  const resp = await fetch(`${BASE_URL}/algorithms`, withTimeout())
+  return resp.json()
+}
+
+export async function listTasks(): Promise<TaskListResponse> {
+  const resp = await fetch(`${BASE_URL}/train`, withTimeout())
+  if (!resp.ok) throw new Error(await resp.text())
   return resp.json()
 }
 
 export async function createTrain(req: CreateTrainRequest): Promise<{ task_id: string }> {
-  const resp = await fetch(`${BASE_URL}/train`, {
+  const resp = await fetch(`${BASE_URL}/train`, withTimeout({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req)
-  })
+  }))
   if (!resp.ok) throw new Error(await resp.text())
   return resp.json()
 }
 
 export async function trainStep(taskId: string, epochs: number): Promise<TrainStatusResponse> {
-  const resp = await fetch(`${BASE_URL}/train/${taskId}/step`, {
+  const resp = await fetch(`${BASE_URL}/train/${taskId}/step`, withTimeout({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ epochs })
-  })
+  }))
   if (!resp.ok) throw new Error(await resp.text())
   return resp.json()
 }
 
 export async function getTrainStatus(taskId: string): Promise<TrainStatusResponse> {
-  const resp = await fetch(`${BASE_URL}/train/${taskId}/status`)
+  const resp = await fetch(`${BASE_URL}/train/${taskId}/status`, withTimeout())
   if (!resp.ok) throw new Error(await resp.text())
   return resp.json()
 }
 
 export async function stopTrain(taskId: string): Promise<void> {
-  const resp = await fetch(`${BASE_URL}/train/${taskId}/stop`, { method: 'POST' })
+  const resp = await fetch(`${BASE_URL}/train/${taskId}/stop`, withTimeout({ method: 'POST' }))
   if (!resp.ok) throw new Error(await resp.text())
 }
 
 export async function getInference(taskId: string): Promise<InferenceResponse> {
-  const resp = await fetch(`${BASE_URL}/inference/${taskId}`)
+  const resp = await fetch(`${BASE_URL}/inference/${taskId}`, withTimeout())
+  if (!resp.ok) throw new Error(await resp.text())
+  return resp.json()
+}
+
+export async function getTrainingHistory(taskId: string): Promise<TrainingHistory> {
+  const resp = await fetch(`${BASE_URL}/train/${taskId}/history`, withTimeout())
+  if (!resp.ok) throw new Error(await resp.text())
+  return resp.json()
+}
+
+export async function getRecall(taskId: string): Promise<RecallResponse> {
+  const resp = await fetch(`${BASE_URL}/train/${taskId}/recall`, withTimeout())
   if (!resp.ok) throw new Error(await resp.text())
   return resp.json()
 }

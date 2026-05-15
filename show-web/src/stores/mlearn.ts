@@ -1,8 +1,3 @@
-/**
- * 机器学习状态管理
- * 对接 m-learn REST API (step-based training)
- */
-
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
@@ -12,6 +7,9 @@ import {
   getTrainStatus,
   stopTrain,
   getInference,
+  listTasks,
+  getTrainingHistory,
+  getRecall,
   type CreateTrainRequest,
   type TrainStatusResponse,
   type InferenceResponse,
@@ -20,25 +18,44 @@ import {
   type Genetic2DInference,
   type AlgorithmType,
   type RegressionFunction,
-  type GeneticFunction
+  type GeneticFunction,
+  type TrainingHistory,
+  type RecallResponse
 } from '../api/mlearn'
+
+export interface TaskItem {
+  id: string
+  algorithm: AlgorithmType
+  fn: RegressionFunction | GeneticFunction
+  label: string
+  createdAt: number
+}
+
+const regressionLabels: Record<RegressionFunction, string> = {
+  linear: '线性 y=2x+1',
+  quadratic: '二次 y=x²',
+  sinusoidal: '正弦 y=sin(x)'
+}
+
+const geneticLabels: Record<GeneticFunction, string> = {
+  ackley: 'Ackley (1D)',
+  rastrigin_variant: 'Rastrigin 变体 (2D)'
+}
 
 export const useMLearnStore = defineStore('mlearn', () => {
   const isConnected = ref(false)
+  const tasks = ref<TaskItem[]>([])
   const currentTaskId = ref<string | null>(null)
   const taskStatus = ref<TrainStatusResponse | null>(null)
   const inferenceData = ref<InferenceResponse | null>(null)
   const isTraining = ref(false)
   const error = ref<string | null>(null)
   const lossHistory = ref<number[]>([])
-
-  const algorithm = ref<AlgorithmType>('regression')
-  const regressionFn = ref<RegressionFunction>('linear')
-  const geneticFn = ref<GeneticFunction>('ackley')
-  const learningRate = ref(0.01)
-  const noise = ref(0.1)
+  const trainingHistory = ref<TrainingHistory | null>(null)
+  const recallData = ref<RecallResponse | null>(null)
   const epochsPerStep = ref(10)
 
+  const currentTask = computed(() => tasks.value.find(t => t.id === currentTaskId.value) ?? null)
   const hasTask = computed(() => currentTaskId.value !== null)
   const totalEpochs = computed(() => taskStatus.value?.total_epochs ?? 0)
   const bestFitness = computed(() => taskStatus.value?.best_fitness ?? null)
@@ -64,27 +81,90 @@ export const useMLearnStore = defineStore('mlearn', () => {
     isConnected.value = await checkHealth()
   }
 
-  async function createTask() {
+  async function fetchTasks() {
+    try {
+      const resp = await listTasks()
+      const backendTasks = resp.tasks.map(t => {
+        const fn = t.algorithm === 'regression'
+          ? (t.regression_fn ?? 'linear')
+          : (t.genetic_fn ?? 'ackley')
+        const label = t.algorithm === 'regression'
+          ? regressionLabels[fn as RegressionFunction]
+          : geneticLabels[fn as GeneticFunction]
+        return {
+          id: t.task_id,
+          algorithm: t.algorithm,
+          fn: fn as RegressionFunction & GeneticFunction,
+          label,
+          createdAt: t.created_at * 1000
+        } as TaskItem
+      })
+      const localIds = new Set(tasks.value.map(t => t.id))
+      for (const bt of backendTasks) {
+        if (!localIds.has(bt.id)) {
+          tasks.value.push(bt)
+        }
+      }
+      const backendIds = new Set(backendTasks.map(t => t.id))
+      tasks.value = tasks.value.filter(t => backendIds.has(t.id))
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '同步任务列表失败'
+    }
+  }
+
+  async function createTask(opts: {
+    algorithm: AlgorithmType
+    regressionFn?: RegressionFunction
+    geneticFn?: GeneticFunction
+    learningRate?: number
+    noise?: number
+    xMin?: number
+    xMax?: number
+  }): Promise<string | null> {
     try {
       error.value = null
       const req: CreateTrainRequest = {
-        algorithm: algorithm.value,
-        learning_rate: learningRate.value,
-        noise: noise.value
+        algorithm: opts.algorithm,
+        learning_rate: opts.learningRate ?? 0.01,
+        noise: opts.noise ?? 0.1
       }
-      if (algorithm.value === 'regression') {
-        req.regression_fn = regressionFn.value
+      if (opts.xMin !== undefined) req.x_min = opts.xMin
+      if (opts.xMax !== undefined) req.x_max = opts.xMax
+      if (opts.algorithm === 'regression') {
+        req.regression_fn = opts.regressionFn ?? 'linear'
       } else {
-        req.genetic_fn = geneticFn.value
+        req.genetic_fn = opts.geneticFn ?? 'ackley'
       }
       const { task_id } = await createTrain(req)
-      currentTaskId.value = task_id
-      lossHistory.value = []
-      inferenceData.value = null
-      await fetchStatus()
+      const fn = opts.algorithm === 'regression'
+        ? (opts.regressionFn ?? 'linear')
+        : (opts.geneticFn ?? 'ackley')
+      const label = opts.algorithm === 'regression'
+        ? regressionLabels[fn as RegressionFunction]
+        : geneticLabels[fn as GeneticFunction]
+
+      tasks.value.unshift({
+        id: task_id,
+        algorithm: opts.algorithm,
+        fn: fn as RegressionFunction & GeneticFunction,
+        label,
+        createdAt: Date.now()
+      })
+      return task_id
     } catch (e) {
       error.value = e instanceof Error ? e.message : '创建任务失败'
+      return null
     }
+  }
+
+  async function selectTask(taskId: string) {
+    currentTaskId.value = taskId
+    lossHistory.value = []
+    trainingHistory.value = null
+    recallData.value = null
+    inferenceData.value = null
+    taskStatus.value = null
+    await fetchStatus()
   }
 
   async function fetchStatus() {
@@ -96,6 +176,15 @@ export const useMLearnStore = defineStore('mlearn', () => {
     }
   }
 
+  const MAX_LOSS_HISTORY = 500
+
+  function appendLoss(val: number) {
+    const next = lossHistory.value.length >= MAX_LOSS_HISTORY
+      ? [...lossHistory.value.slice(-MAX_LOSS_HISTORY / 2), val]
+      : [...lossHistory.value, val]
+    lossHistory.value = next
+  }
+
   async function doStep() {
     if (!currentTaskId.value) return
     try {
@@ -104,8 +193,10 @@ export const useMLearnStore = defineStore('mlearn', () => {
       const status = await trainStep(currentTaskId.value, epochsPerStep.value)
       taskStatus.value = status
       if (status.best_fitness !== null) {
-        lossHistory.value.push(status.best_fitness)
+        appendLoss(status.best_fitness)
       }
+      await fetchHistory()
+      await fetchRecall()
     } catch (e) {
       error.value = e instanceof Error ? e.message : '训练失败'
     } finally {
@@ -119,10 +210,18 @@ export const useMLearnStore = defineStore('mlearn', () => {
       isTraining.value = true
       error.value = null
       for (let i = 0; i < steps; i++) {
-        const status = await trainStep(currentTaskId.value, epochsPerStep.value)
-        taskStatus.value = status
-        if (status.best_fitness !== null) {
-          lossHistory.value.push(status.best_fitness)
+        if (!currentTaskId.value) break
+        try {
+          const status = await trainStep(currentTaskId.value, epochsPerStep.value)
+          taskStatus.value = status
+          if (status.best_fitness !== null) {
+            appendLoss(status.best_fitness)
+          }
+          await fetchHistory()
+          await fetchRecall()
+        } catch (innerErr) {
+          error.value = innerErr instanceof Error ? innerErr.message : '训练中断'
+          break
         }
       }
     } catch (e) {
@@ -141,15 +240,39 @@ export const useMLearnStore = defineStore('mlearn', () => {
     }
   }
 
-  async function removeTask() {
+  async function fetchHistory() {
     if (!currentTaskId.value) return
     try {
-      await stopTrain(currentTaskId.value)
+      trainingHistory.value = await getTrainingHistory(currentTaskId.value)
+    } catch (e) {
+      console.warn('fetchHistory failed:', e instanceof Error ? e.message : e)
+    }
+  }
+
+  async function fetchRecall() {
+    if (!currentTaskId.value) return
+    try {
+      recallData.value = await getRecall(currentTaskId.value)
+    } catch (e) {
+      console.warn('fetchRecall failed:', e instanceof Error ? e.message : e)
+    }
+  }
+
+  async function removeTask(taskId?: string) {
+    const id = taskId ?? currentTaskId.value
+    if (!id) return
+    try {
+      await stopTrain(id)
     } catch {}
-    currentTaskId.value = null
-    taskStatus.value = null
-    inferenceData.value = null
-    lossHistory.value = []
+    tasks.value = tasks.value.filter(t => t.id !== id)
+    if (currentTaskId.value === id) {
+      currentTaskId.value = null
+      taskStatus.value = null
+      inferenceData.value = null
+      lossHistory.value = []
+      trainingHistory.value = null
+      recallData.value = null
+    }
     error.value = null
   }
 
@@ -159,17 +282,16 @@ export const useMLearnStore = defineStore('mlearn', () => {
 
   return {
     isConnected,
+    tasks,
     currentTaskId,
+    currentTask,
     taskStatus,
     inferenceData,
     isTraining,
     error,
     lossHistory,
-    algorithm,
-    regressionFn,
-    geneticFn,
-    learningRate,
-    noise,
+    trainingHistory,
+    recallData,
     epochsPerStep,
     hasTask,
     totalEpochs,
@@ -180,11 +302,15 @@ export const useMLearnStore = defineStore('mlearn', () => {
     genetic1DData,
     genetic2DData,
     checkConnection,
+    fetchTasks,
     createTask,
+    selectTask,
     fetchStatus,
     doStep,
     doMultiStep,
     fetchInference,
+    fetchHistory,
+    fetchRecall,
     removeTask,
     clearError
   }

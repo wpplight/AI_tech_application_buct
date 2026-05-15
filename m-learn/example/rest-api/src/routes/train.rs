@@ -7,6 +7,15 @@ use uuid::Uuid;
 use crate::models::*;
 use crate::task_manager::TaskManager;
 
+pub async fn list_tasks(
+    State(tm): State<TaskManager>,
+) -> Json<TaskListResponse> {
+    info!("GET /train");
+    let tasks = tm.list_tasks();
+    info!("GET /train | returning {} tasks", tasks.len());
+    Json(TaskListResponse { tasks })
+}
+
 pub async fn create_train(
     State(tm): State<TaskManager>,
     Json(req): Json<CreateTrainRequest>,
@@ -47,4 +56,22 @@ pub async fn train_stop(
     info!("POST /train/{}/stop", task_id);
     tm.stop(task_id).map_err(|e| (axum::http::StatusCode::NOT_FOUND, e))?;
     Ok(Json(serde_json::json!({ "status": "stopped" })))
+}
+
+pub async fn train_history(
+    State(tm): State<TaskManager>,
+    Path(task_id): Path<Uuid>,
+) -> Result<Json<TrainingHistory>, (axum::http::StatusCode, String)> {
+    info!("GET /train/{}/history", task_id);
+    let history = tm.get_history(task_id).map_err(|e| (axum::http::StatusCode::NOT_FOUND, e))?;
+    Ok(Json(history))
+}
+
+pub async fn train_recall(
+    State(tm): State<TaskManager>,
+    Path(task_id): Path<Uuid>,
+) -> Result<Json<RecallResponse>, (axum::http::StatusCode, String)> {
+    info!("GET /train/{}/recall", task_id);
+    let recall = tm.get_recall(task_id).map_err(|e| (axum::http::StatusCode::NOT_FOUND, e))?;
+    Ok(Json(recall))
 }

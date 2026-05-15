@@ -1,178 +1,303 @@
 <template>
   <div class="task-page">
-    <h2 class="page-title">创建训练任务</h2>
-
-    <div class="form-card">
-      <div class="form-group">
-        <label class="form-label">算法类型</label>
-        <div class="radio-group">
-          <label class="radio-item" :class="{ active: mlearn.algorithm === 'regression' }">
-            <input type="radio" v-model="mlearn.algorithm" value="regression" />
-            <span>回归拟合</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.algorithm === 'genetic' }">
-            <input type="radio" v-model="mlearn.algorithm" value="genetic" />
-            <span>遗传算法</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="form-group" v-if="mlearn.algorithm === 'regression'">
-        <label class="form-label">拟合函数</label>
-        <div class="radio-group">
-          <label class="radio-item" :class="{ active: mlearn.regressionFn === 'linear' }">
-            <input type="radio" v-model="mlearn.regressionFn" value="linear" />
-            <span>线性 y=2x+1</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.regressionFn === 'quadratic' }">
-            <input type="radio" v-model="mlearn.regressionFn" value="quadratic" />
-            <span>二次 y=x²</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.regressionFn === 'sinusoidal' }">
-            <input type="radio" v-model="mlearn.regressionFn" value="sinusoidal" />
-            <span>正弦 y=sin(x)</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="form-group" v-if="mlearn.algorithm === 'genetic'">
-        <label class="form-label">目标函数</label>
-        <div class="radio-group">
-          <label class="radio-item" :class="{ active: mlearn.geneticFn === 'ackley' }">
-            <input type="radio" v-model="mlearn.geneticFn" value="ackley" />
-            <span>Ackley (1D)</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.geneticFn === 'rastrigin_variant' }">
-            <input type="radio" v-model="mlearn.geneticFn" value="rastrigin_variant" />
-            <span>Rastrigin 变体 (2D)</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="form-group" v-if="mlearn.algorithm === 'regression'">
-        <label class="form-label">学习率</label>
-        <div class="radio-group">
-          <label class="radio-item" :class="{ active: mlearn.learningRate === 0.001 }">
-            <input type="radio" v-model.number="mlearn.learningRate" :value="0.001" />
-            <span>0.001 (慢)</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.learningRate === 0.005 }">
-            <input type="radio" v-model.number="mlearn.learningRate" :value="0.005" />
-            <span>0.005</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.learningRate === 0.01 }">
-            <input type="radio" v-model.number="mlearn.learningRate" :value="0.01" />
-            <span>0.01 (适中)</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.learningRate === 0.05 }">
-            <input type="radio" v-model.number="mlearn.learningRate" :value="0.05" />
-            <span>0.05</span>
-          </label>
-          <label class="radio-item" :class="{ active: mlearn.learningRate === 0.1 }">
-            <input type="radio" v-model.number="mlearn.learningRate" :value="0.1" />
-            <span>0.1 (快)</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="form-group" v-if="mlearn.algorithm === 'regression'">
-        <label class="form-label">噪声: {{ mlearn.noise }}</label>
-        <input type="range" v-model.number="mlearn.noise" min="0" max="1" step="0.05" class="range-input" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">每步 Epochs: {{ mlearn.epochsPerStep }}</label>
-        <input type="range" v-model.number="mlearn.epochsPerStep" min="1" max="100" step="1" class="range-input" />
-      </div>
-
-      <div class="form-actions">
-        <button class="btn-primary" @click="handleCreate" :disabled="mlearn.isTraining">
-          创建任务
-        </button>
-        <button class="btn-danger" v-if="mlearn.hasTask" @click="handleStop">
-          删除任务
-        </button>
-      </div>
-
-      <div class="error-msg" v-if="mlearn.error">{{ mlearn.error }}</div>
+    <div class="page-header">
+      <h2 class="page-title">任务管理</h2>
+      <button class="btn-create" @click="showCreate = true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 8v8"/>
+          <path d="M8 12h8"/>
+        </svg>
+        创建任务
+      </button>
     </div>
 
-    <div class="task-card" v-if="mlearn.hasTask">
-      <h3 class="card-title">任务状态</h3>
-      <div class="stat-grid">
-        <div class="stat-item">
-          <div class="stat-label">Task ID</div>
-          <div class="stat-value mono">{{ mlearn.currentTaskId?.slice(0, 12) }}...</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">算法</div>
-          <div class="stat-value">{{ mlearn.taskStatus?.algorithm }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">总 Epochs</div>
-          <div class="stat-value">{{ mlearn.totalEpochs }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Loss</div>
-          <div class="stat-value">{{ mlearn.bestFitness?.toFixed(6) ?? '-' }}</div>
-        </div>
+    <div class="create-panel" v-if="showCreate">
+      <div class="create-header">
+        <span class="create-title">新建训练任务</span>
+        <button class="btn-close" @click="showCreate = false">&times;</button>
       </div>
 
-      <div class="train-actions">
-        <button class="btn-primary" @click="handleStep" :disabled="mlearn.isTraining">
-          {{ mlearn.isTraining ? '训练中...' : `训练 ${mlearn.epochsPerStep} Epochs` }}
+      <div class="create-body">
+        <div class="form-group">
+          <label class="form-label">算法类型</label>
+          <div class="radio-group">
+            <label class="radio-item" :class="{ active: form.algorithm === 'regression' }">
+              <input type="radio" v-model="form.algorithm" value="regression" />
+              <span>回归拟合</span>
+            </label>
+            <label class="radio-item" :class="{ active: form.algorithm === 'genetic' }">
+              <input type="radio" v-model="form.algorithm" value="genetic" />
+              <span>遗传算法</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'regression'">
+          <label class="form-label">拟合函数</label>
+          <div class="radio-group">
+            <label class="radio-item" :class="{ active: form.regressionFn === 'linear' }">
+              <input type="radio" v-model="form.regressionFn" value="linear" />
+              <span>线性 y=2x+1</span>
+            </label>
+            <label class="radio-item" :class="{ active: form.regressionFn === 'quadratic' }">
+              <input type="radio" v-model="form.regressionFn" value="quadratic" />
+              <span>二次 y=x²</span>
+            </label>
+            <label class="radio-item" :class="{ active: form.regressionFn === 'sinusoidal' }">
+              <input type="radio" v-model="form.regressionFn" value="sinusoidal" />
+              <span>正弦 y=sin(x)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'genetic'">
+          <label class="form-label">目标函数</label>
+          <div class="radio-group">
+            <label class="radio-item" :class="{ active: form.geneticFn === 'ackley' }">
+              <input type="radio" v-model="form.geneticFn" value="ackley" />
+              <span>Ackley (1D)</span>
+            </label>
+            <label class="radio-item" :class="{ active: form.geneticFn === 'rastrigin_variant' }">
+              <input type="radio" v-model="form.geneticFn" value="rastrigin_variant" />
+              <span>Rastrigin 变体 (2D)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'regression'">
+          <label class="form-label">学习率</label>
+          <div class="radio-group">
+            <label class="radio-item" v-for="lr in lrOptions" :key="lr.value" :class="{ active: form.learningRate === lr.value }">
+              <input type="radio" v-model.number="form.learningRate" :value="lr.value" />
+              <span>{{ lr.label }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'regression'">
+          <label class="form-label">噪声</label>
+          <div class="radio-group">
+            <label class="radio-item" v-for="n in noiseOptions" :key="n.value" :class="{ active: form.noise === n.value }">
+              <input type="radio" v-model.number="form.noise" :value="n.value" />
+              <span>{{ n.label }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'regression'">
+          <label class="form-label">训练范围（可选）</label>
+          <div class="range-inputs">
+            <div class="range-field">
+              <span class="range-label">X 最小值</span>
+              <input type="number" v-model.number="form.xMin" placeholder="默认自动" class="range-input" />
+            </div>
+            <div class="range-divider">~</div>
+            <div class="range-field">
+              <span class="range-label">X 最大值</span>
+              <input type="number" v-model.number="form.xMax" placeholder="默认自动" class="range-input" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn-primary" @click="handleCreate" :disabled="creating">
+          {{ creating ? '创建中...' : '确认创建' }}
         </button>
-        <button class="btn-secondary" @click="handleMultiStep(10)" :disabled="mlearn.isTraining">
-          训练 10 步
-        </button>
-        <button class="btn-secondary" @click="handleMultiStep(50)" :disabled="mlearn.isTraining">
-          训练 50 步
-        </button>
+          <button class="btn-ghost" @click="showCreate = false">取消</button>
+        </div>
+
+        <div class="error-msg" v-if="mlearn.error">{{ mlearn.error }}</div>
       </div>
+    </div>
+
+    <div class="task-list" v-if="mlearn.tasks.length > 0">
+      <div class="task-card" v-for="task in mlearn.tasks" :key="task.id"
+        :class="{ active: task.id === mlearn.currentTaskId }"
+        @click="handleEnter(task.id)">
+        <div class="task-main">
+          <span class="task-badge" :class="task.algorithm === 'regression' ? 'badge-blue' : 'badge-purple'">
+            {{ task.algorithm === 'regression' ? '回归' : '遗传' }}
+          </span>
+          <span class="task-label">{{ task.label }}</span>
+        </div>
+        <div class="task-meta">
+          <span class="task-id">{{ task.id.slice(0, 8) }}...</span>
+          <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+        </div>
+        <div class="task-actions" @click.stop>
+          <button class="btn-enter" @click="handleEnter(task.id)">进入</button>
+          <button class="btn-delete" @click="handleDelete(task.id)">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty-state" v-else>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" class="empty-icon">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <path d="M12 8v8"/>
+        <path d="M8 12h8"/>
+      </svg>
+      <p>暂无训练任务，点击上方「创建任务」开始</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useMLearnStore } from '../stores/mlearn'
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { useMLearnStore, type TaskItem } from '../stores/mlearn'
+import type { RegressionFunction, GeneticFunction } from '../api/mlearn'
 
 const mlearn = useMLearnStore()
+const router = useRouter()
+
+const showCreate = ref(false)
+const creating = ref(false)
+
+const form = reactive({
+  algorithm: 'regression' as 'regression' | 'genetic',
+  regressionFn: 'linear' as RegressionFunction,
+  geneticFn: 'ackley' as GeneticFunction,
+  learningRate: 0.01,
+  noise: 0.1,
+  xMin: undefined as number | undefined,
+  xMax: undefined as number | undefined
+})
+
+const lrOptions = [
+  { value: 0.001, label: '0.001 (慢)' },
+  { value: 0.005, label: '0.005' },
+  { value: 0.01, label: '0.01 (适中)' },
+  { value: 0.05, label: '0.05' },
+  { value: 0.1, label: '0.1 (快)' }
+]
+
+const noiseOptions = [
+  { value: 0, label: '无噪声' },
+  { value: 0.05, label: '0.05 (低)' },
+  { value: 0.1, label: '0.1 (中)' },
+  { value: 0.3, label: '0.3 (高)' },
+  { value: 0.5, label: '0.5 (很高)' }
+]
 
 async function handleCreate() {
-  await mlearn.createTask()
+  creating.value = true
+  const id = await mlearn.createTask({
+    algorithm: form.algorithm,
+    regressionFn: form.regressionFn,
+    geneticFn: form.geneticFn,
+    learningRate: form.learningRate,
+    noise: form.noise,
+    xMin: form.xMin,
+    xMax: form.xMax
+  })
+  creating.value = false
+  if (id) {
+    showCreate.value = false
+    await handleEnter(id)
+  }
 }
 
-async function handleStop() {
-  await mlearn.removeTask()
+async function handleEnter(taskId: string) {
+  await mlearn.selectTask(taskId)
+  const task = mlearn.tasks.find(t => t.id === taskId)
+  if (task?.algorithm === 'regression') {
+    router.push('/mlearn/regression')
+  } else {
+    router.push('/mlearn/genetic')
+  }
 }
 
-async function handleStep() {
-  await mlearn.doStep()
-  await mlearn.fetchInference()
+async function handleDelete(taskId: string) {
+  await mlearn.removeTask(taskId)
 }
 
-async function handleMultiStep(steps: number) {
-  await mlearn.doMultiStep(steps)
-  await mlearn.fetchInference()
+function formatTime(ts: number): string {
+  const d = new Date(ts)
+  const h = d.getHours().toString().padStart(2, '0')
+  const m = d.getMinutes().toString().padStart(2, '0')
+  const s = d.getSeconds().toString().padStart(2, '0')
+  return `${h}:${m}:${s}`
 }
 </script>
 
 <style scoped>
 .task-page {
-  max-width: 640px;
+  max-width: 720px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 
 .page-title {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 20px 0;
+  margin: 0;
 }
 
-.form-card {
+.btn-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-create:hover {
+  opacity: 0.9;
+}
+
+.create-panel {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 8px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.create-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(74, 144, 226, 0.04);
+}
+
+.create-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.btn-close:hover {
+  color: var(--text-primary);
+}
+
+.create-body {
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -210,6 +335,11 @@ async function handleMultiStep(steps: number) {
   transition: all 0.15s;
 }
 
+.radio-item:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+}
+
 .radio-item.active {
   border-color: var(--accent-blue);
   background: rgba(74, 144, 226, 0.08);
@@ -220,21 +350,10 @@ async function handleMultiStep(steps: number) {
   display: none;
 }
 
-.range-input {
-  width: 100%;
-  accent-color: var(--accent-blue);
-}
-
 .form-actions {
   display: flex;
   gap: 10px;
-  padding-top: 8px;
-}
-
-.train-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
+  padding-top: 4px;
 }
 
 .btn-primary {
@@ -258,10 +377,10 @@ async function handleMultiStep(steps: number) {
   cursor: not-allowed;
 }
 
-.btn-secondary {
-  padding: 10px 16px;
-  background: var(--bg-hover);
-  color: var(--text-primary);
+.btn-ghost {
+  padding: 10px 20px;
+  background: none;
+  color: var(--text-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
@@ -269,24 +388,9 @@ async function handleMultiStep(steps: number) {
   transition: all 0.15s;
 }
 
-.btn-secondary:hover {
-  background: var(--border);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-danger {
-  padding: 10px 20px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .error-msg {
@@ -297,48 +401,181 @@ async function handleMultiStep(steps: number) {
   border-radius: 4px;
 }
 
-.task-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 16px;
-}
-
-.card-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 14px 0;
-}
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.range-inputs {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
-.stat-item {
+.range-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-.stat-label {
+.range-label {
   font-size: 11px;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
-.stat-value {
-  font-size: 14px;
+.range-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
   color: var(--text-primary);
-  font-weight: 600;
+  background: var(--bg-primary);
+  width: 120px;
+  outline: none;
+  transition: border-color 0.15s;
 }
 
-.stat-value.mono {
+.range-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.range-divider {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin-top: 18px;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.task-card:hover {
+  border-color: var(--accent-blue);
+  background: rgba(74, 144, 226, 0.03);
+}
+
+.task-card.active {
+  border-color: var(--accent-blue);
+  background: rgba(74, 144, 226, 0.06);
+}
+
+.task-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-badge {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.badge-blue {
+  background: rgba(74, 144, 226, 0.12);
+  color: var(--accent-blue);
+}
+
+.badge-purple {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.task-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.task-id {
+  font-size: 11px;
+  color: var(--text-muted);
   font-family: monospace;
+}
+
+.task-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.task-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-enter {
+  padding: 6px 14px;
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-enter:hover {
+  opacity: 0.9;
+}
+
+.btn-delete {
+  padding: 6px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  border-style: dashed;
+}
+
+.empty-icon {
+  opacity: 0.3;
 }
 </style>
