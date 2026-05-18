@@ -20,7 +20,9 @@ import {
   type RegressionFunction,
   type GeneticFunction,
   type TrainingHistory,
-  type RecallResponse
+  type RecallResponse,
+  type Objective,
+  type GeneticParams
 } from '../api/mlearn'
 
 export interface TaskItem {
@@ -120,6 +122,10 @@ export const useMLearnStore = defineStore('mlearn', () => {
     noise?: number
     xMin?: number
     xMax?: number
+    minValue?: number
+    maxValue?: number
+    objective?: Objective
+    geneticParams?: GeneticParams
   }): Promise<string | null> {
     try {
       error.value = null
@@ -130,6 +136,10 @@ export const useMLearnStore = defineStore('mlearn', () => {
       }
       if (opts.xMin !== undefined) req.x_min = opts.xMin
       if (opts.xMax !== undefined) req.x_max = opts.xMax
+      if (opts.minValue !== undefined) req.min_value = opts.minValue
+      if (opts.maxValue !== undefined) req.max_value = opts.maxValue
+      if (opts.objective !== undefined) req.objective = opts.objective
+      if (opts.geneticParams !== undefined) req.genetic_params = opts.geneticParams
       if (opts.algorithm === 'regression') {
         req.regression_fn = opts.regressionFn ?? 'linear'
       } else {
@@ -195,8 +205,10 @@ export const useMLearnStore = defineStore('mlearn', () => {
       if (status.best_fitness !== null) {
         appendLoss(status.best_fitness)
       }
-      await fetchHistory()
-      await fetchRecall()
+      if (currentTask.value?.algorithm === 'regression') {
+        await fetchHistory()
+        await fetchRecall()
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '训练失败'
     } finally {
@@ -206,6 +218,7 @@ export const useMLearnStore = defineStore('mlearn', () => {
 
   async function doMultiStep(steps: number) {
     if (!currentTaskId.value) return
+    const isReg = currentTask.value?.algorithm === 'regression'
     try {
       isTraining.value = true
       error.value = null
@@ -217,8 +230,10 @@ export const useMLearnStore = defineStore('mlearn', () => {
           if (status.best_fitness !== null) {
             appendLoss(status.best_fitness)
           }
-          await fetchHistory()
-          await fetchRecall()
+          if (isReg) {
+            await fetchHistory()
+            await fetchRecall()
+          }
         } catch (innerErr) {
           error.value = innerErr instanceof Error ? innerErr.message : '训练中断'
           break

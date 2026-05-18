@@ -21,8 +21,7 @@
         <button class="btn-train" @click="handleStep" :disabled="mlearn.isTraining">
           {{ mlearn.isTraining ? '进化中...' : '进化' }}
         </button>
-        <button class="btn-sm" @click="handleMultiStep(10)" :disabled="mlearn.isTraining">x10</button>
-        <button class="btn-sm" @click="handleMultiStep(50)" :disabled="mlearn.isTraining">x50</button>
+
       </div>
     </div>
 
@@ -45,7 +44,7 @@
         </div>
       </div>
       <div class="chart-body">
-        <Line :data="line1DData" :options="line1DOptions" />
+        <Line v-if="line1DData" :data="line1DData" :options="line1DOptions" />
       </div>
       <div class="chart-footer">
         <span class="stat-item">最优基因: <strong>{{ chart1D.best_gene.toFixed(6) }}</strong></span>
@@ -56,36 +55,60 @@
     <div class="chart-card" v-if="chart2D">
       <div class="chart-header">
         <span class="chart-title">Rastrigin 变体 (2D)</span>
+        <div class="view-toggle">
+          <button class="toggle-btn" :class="{ active: viewMode === 'fitness' }" @click="viewMode = 'fitness'">
+            适应度热图
+          </button>
+          <button class="toggle-btn" :class="{ active: viewMode === '3d' }" @click="viewMode = '3d'">
+            3D 基因视图
+          </button>
+        </div>
         <div class="chart-legend">
           <span class="legend-item">
             <span class="legend-dot" style="background: #22c55e;"></span>
             最优基因 ({{ chart2D.best_gene_x.toFixed(2) }}, {{ chart2D.best_gene_y.toFixed(2) }})
           </span>
+          <span class="legend-item">
+            <span class="legend-dot" style="background: #ef4444;"></span>
+            种群 ({{ chart2D.population_x.length }}个)
+          </span>
           <span class="legend-item">Fitness: <strong>{{ chart2D.best_fitness.toFixed(4) }}</strong></span>
         </div>
       </div>
-      <div class="heatmap-body">
-        <div class="heatmap-wrap">
-          <canvas ref="heatmapCanvas" class="heatmap-canvas"></canvas>
-          <div class="heatmap-marker" :style="markerStyle"></div>
+      <div class="chart-body">
+        <div v-if="viewMode === '3d'" class="heatmap-body">
+          <Genetic3DViewer />
         </div>
-        <div class="heatmap-scale">
-          <div class="scale-bar"></div>
-          <div class="scale-labels">
-            <span>Low</span>
-            <span>High</span>
+        <div v-else class="heatmap-body">
+          <div class="heatmap-wrap">
+            <canvas ref="heatmapCanvas" class="heatmap-canvas"></canvas>
+            <div class="heatmap-marker" :style="markerStyle"></div>
+            <div
+              v-for="(marker, idx) in populationMarkers"
+              :key="idx"
+              class="population-marker"
+              :class="{ 'is-best': marker.isBest }"
+              :style="{ left: marker.left, top: marker.top }"
+            ></div>
+          </div>
+          <div class="heatmap-scale">
+            <div class="scale-bar"></div>
+            <div class="scale-labels">
+              <span>Low</span>
+              <span>High</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="chart-card" v-if="mlearn.lossHistory.length > 0">
+    <div class="chart-card" v-if="chart1D">
       <div class="chart-header">
         <span class="chart-title">适应度变化</span>
         <span class="chart-subtitle">共 {{ mlearn.lossHistory.length }} 代</span>
       </div>
       <div class="chart-body chart-body-sm">
-        <Line :data="lossChartData" :options="lossChartOptions" />
+        <Line v-if="lossChartData" :data="lossChartData" :options="lossChartOptions" />
       </div>
     </div>
 
@@ -117,23 +140,33 @@ import {
   type ChartData
 } from 'chart.js'
 import { useMLearnStore } from '../stores/mlearn'
+import Genetic3DViewer from './components/Genetic3DViewer.vue'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
 const mlearn = useMLearnStore()
-const heatmapCanvas = ref<HTMLCanvasElement | null>(null)
 
+const viewMode = ref<'fitness' | '3d'>('fitness')
 const chart1D = computed(() => mlearn.genetic1DData)
 const chart2D = computed(() => mlearn.genetic2DData)
 
-const line1DData = computed<ChartData<'line'>>(() => {
+const line1DData = computed((): ChartData<'line'> => {
   if (!chart1D.value) return { labels: [], datasets: [] }
 
   const xRange = chart1D.value.x_range
   const yTrue = chart1D.value.y_true
+  const popX = chart1D.value.population_x
 
-  const annotationIdx = xRange.findIndex(x => Math.abs(x - chart1D.value!.best_gene) < 0.01)
-  const annotationData = xRange.map((_, i) => i === annotationIdx ? yTrue[i] : null)
+  const annotationIdx = xRange.findIndex(x => Math.abs(x - (chart1D.value?.best_gene ?? 0)) < 0.01)
+  const annotationData = xRange.map((_, i) => i === annotationIdx ? (yTrue[i] ?? null) : null)
+
+  const popYData: (number | null)[] = new Array(xRange.length).fill(null)
+  for (const px of popX) {
+    const idx = xRange.findIndex(x => Math.abs(x - px) < 0.01)
+    if (idx >= 0 && idx < popYData.length) {
+      popYData[idx] = yTrue[idx] ?? null
+    }
+  }
 
   return {
     labels: xRange.map(v => v.toFixed(2)),
@@ -147,6 +180,18 @@ const line1DData = computed<ChartData<'line'>>(() => {
         pointRadius: 0,
         tension: 0.4,
         fill: true,
+        order: 2
+      },
+      {
+        label: '种群',
+        data: popYData,
+        borderColor: 'rgba(239, 68, 68, 0.6)',
+        backgroundColor: 'rgba(239, 68, 68, 0.4)',
+        pointRadius: 4,
+        pointBackgroundColor: '#ef4444',
+        pointBorderColor: 'white',
+        pointBorderWidth: 1,
+        showLine: false,
         order: 1
       },
       {
@@ -164,7 +209,7 @@ const line1DData = computed<ChartData<'line'>>(() => {
         order: 0
       }
     ]
-  }
+  } as ChartData<'line'>
 })
 
 const line1DOptions = computed<ChartOptions<'line'>>(() => ({
@@ -201,6 +246,35 @@ const line1DOptions = computed<ChartOptions<'line'>>(() => ({
   }
 }))
 
+const populationMarkers = computed(() => {
+  if (!chart2D.value) return []
+  const xGrid = chart2D.value.x_grid
+  const yGrid = chart2D.value.y_grid
+  const popX = chart2D.value.population_x
+  const popY = chart2D.value.population_y
+  if (!popX.length || !popY.length) return []
+  
+  const xMin = Math.min(...xGrid)
+  const xMax = Math.max(...xGrid)
+  const yMin = Math.min(...yGrid)
+  const yMax = Math.max(...yGrid)
+  
+  const markers: { left: string; top: string; isBest: boolean }[] = []
+  const n = Math.min(popX.length, popY.length)
+  const bestX = chart2D.value.best_gene_x
+  const bestY = chart2D.value.best_gene_y
+  
+  for (let i = 0; i < n; i++) {
+    const px = popX[i] as number
+    const py = popY[i] as number
+    const pctX = ((px - xMin) / (xMax - xMin)) * 100
+    const pctY = ((py - yMin) / (yMax - yMin)) * 100
+    const isBest = Math.abs(px - bestX) < 0.1 && Math.abs(py - bestY) < 0.1
+    markers.push({ left: `${pctX}%`, top: `${pctY}%`, isBest })
+  }
+  return markers
+})
+
 const markerStyle = computed(() => {
   if (!chart2D.value) return { display: 'none' }
   const xGrid = chart2D.value.x_grid
@@ -211,14 +285,13 @@ const markerStyle = computed(() => {
   const yMax = Math.max(...yGrid)
   const pctX = ((chart2D.value.best_gene_x - xMin) / (xMax - xMin)) * 100
   const pctY = ((chart2D.value.best_gene_y - yMin) / (yMax - yMin)) * 100
-  return {
-    left: `${pctX}%`,
-    top: `${pctY}%`
-  }
+  return { left: `${pctX}%`, top: `${pctY}%` }
 })
 
+const heatmapCanvas = ref<HTMLCanvasElement | null>(null)
+
 watch(chart2D, async (data) => {
-  if (!data || !heatmapCanvas.value) return
+  if (!data || !heatmapCanvas.value || viewMode.value !== 'fitness') return
   await nextTick()
 
   const steps = Math.round(Math.sqrt(data.x_grid.length))
@@ -243,7 +316,7 @@ watch(chart2D, async (data) => {
       ctx.fillRect(j, i, 1, 1)
     }
   }
-}, { immediate: true })
+}, { immediate: true, deep: true })
 
 const lossChartData = computed<ChartData<'line'> | null>(() => {
   if (mlearn.lossHistory.length === 0) return null
@@ -439,6 +512,35 @@ async function handleMultiStep(steps: number) {
   justify-content: space-between;
   padding: 14px 20px;
   border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.toggle-btn {
+  padding: 5px 12px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggle-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.toggle-btn.active {
+  background: var(--accent-purple);
+  color: white;
+  border-color: var(--accent-purple);
 }
 
 .chart-title {
@@ -546,6 +648,27 @@ async function handleMultiStep(steps: number) {
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 2;
+}
+
+.population-marker {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.population-marker.is-best {
+  background: #22c55e;
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  z-index: 3;
 }
 
 .heatmap-scale {

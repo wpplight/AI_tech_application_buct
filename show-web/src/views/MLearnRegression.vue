@@ -222,25 +222,41 @@ const genChartData = computed<ChartData<'line'> | null>(() => {
 const recallChartData = computed<ChartData<'line'> | null>(() => {
   const r = mlearn.recallData
   if (!r || r.y_true.length === 0) return null
-  const min = Math.min(...r.y_true)
-  const max = Math.max(...r.y_true)
+  const points: { x: number; y: number }[] = []
+  for (let i = 0; i < r.y_true.length; i++) {
+    const x = r.y_true[i] as number
+    const y = r.y_pred[i] as number
+    if (x !== undefined && y !== undefined) {
+      points.push({ x, y })
+    }
+  }
+  points.sort((a, b) => a.x - b.x)
+  let minVal = Infinity
+  let maxVal = -Infinity
+  for (const p of points) {
+    if (p.x < minVal) minVal = p.x
+    if (p.y < minVal) minVal = p.y
+    if (p.x > maxVal) maxVal = p.x
+    if (p.y > maxVal) maxVal = p.y
+  }
+  if (!isFinite(minVal) || !isFinite(maxVal)) return null
   return {
-    labels: r.y_true.map(v => v.toFixed(2)),
+    labels: points.map(p => p.x.toFixed(2)),
     datasets: [
       {
         label: '预测 vs 真实',
-        data: r.y_true.map((_, i) => ({ x: r.y_true[i], y: r.y_pred[i] })),
+        data: points,
         borderColor: '#10b981',
         backgroundColor: 'rgba(16, 185, 129, 0.15)',
         borderWidth: 2,
-        pointRadius: 0,
+        pointRadius: 2,
         showLine: true,
         tension: 0,
         fill: false
       } as any,
       {
         label: '理想线 y=x',
-        data: [{ x: min, y: min }, { x: max, y: max }],
+        data: [{ x: minVal, y: minVal }, { x: maxVal, y: maxVal }],
         borderColor: 'rgba(156, 163, 175, 0.4)',
         borderWidth: 1.5,
         borderDash: [6, 4],

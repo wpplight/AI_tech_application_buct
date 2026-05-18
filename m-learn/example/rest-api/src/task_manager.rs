@@ -24,10 +24,12 @@ pub enum ModelState {
         history: Vec<EpochRecord>,
         y_val_true: Vec<f64>,
         y_val_pred: Vec<f64>,
+        x_val_orig: Vec<f64>,
     },
     Genetic {
         ga: Mutex<GeneticAlgorithm>,
         function: GeneticFunction,
+        objective: Objective,
     },
 }
 
@@ -104,6 +106,7 @@ impl TaskManager {
                 let y_norm_val: Vec<f32> = val_idx.iter().map(|&i| y_norm_all[i]).collect();
                 let raw_y_val: Vec<f32> = val_idx.iter().map(|&i| raw_y[i]).collect();
 
+                let x_val_orig: Vec<f64> = val_idx.iter().map(|&i| raw_x[i] as f64).collect();
                 let y_val_true: Vec<f64> = raw_y_val.iter().map(|&v| v as f64).collect();
                 let y_val_pred: Vec<f64> = y_norm_val.iter().map(|_| 0.0).collect();
 
@@ -141,46 +144,88 @@ impl TaskManager {
                     history: Vec::new(),
                     y_val_true,
                     y_val_pred,
+                    x_val_orig,
                 }, actual_x_min, actual_x_max)
             }
             AlgorithmType::Genetic => {
                 let func = req.genetic_fn.unwrap_or(GeneticFunction::RastriginVariant);
-                let ga = match func {
+                let objective = req.objective;
+                let params = req.genetic_params.as_ref();
+                let (bounds_min, bounds_max, default_fitness) = match func {
                     GeneticFunction::RastriginVariant => {
-                        let fitness_fn = |genes: &[f32]| {
-                            let x = genes[0];
-                            let y = genes[1];
-                            0.5 - (x * x + y * y).sqrt().sin() / (1.0 + 0.001 * (x * x + y * y)).powi(2)
-                        };
-                        GeneticAlgorithm::new(2, fitness_fn)
-                            .population_size(200)
-                            .tournament_size(10)
-                            .crossover(sbx_crossover(15.0))
-                            .set_mutation(0.01, mutation::uniform_mutation(-50.0, 50.0))
-                            .uniform_bounds(-50.0, 50.0)
-                            .elite_protect(true)
-                            .randomize()
+                        let min_val = req.min_value.unwrap_or(-50.0) as f32;
+                        let max_val = req.max_value.unwrap_or(50.0) as f32;
+                        (min_val, max_val, f32::MAX)
                     }
                     GeneticFunction::Ackley => {
-                        let fitness_fn = |genes: &[f32]| {
+                        let min_val = req.min_value.unwrap_or(-5.12) as f32;
+                        let max_val = req.max_value.unwrap_or(5.12) as f32;
+                        (min_val, max_val, f32::MAX)
+                    }
+                };
+                let ga = match func {
+                    GeneticFunction::RastriginVariant => {
+                        let fitness_fn = move |genes: &[f32]| {
+                            let x = genes[0];
+                            let y = genes[1];
+                            let r2 = x * x + y * y;
+                            let r = r2.sqrt();
+                            let raw = 0.5 - (r - 0.5).sin() / (1.0 + 0.001 * r2).powi(2);
+                            match objective {
+                                Objective::Maximize => raw,
+                                Objective::Minimize => -raw,
+                            }
+                        };
+                        let mut ga = GeneticAlgorithm::new(2, fitness_fn);
+                        if let Some(p) = params {
+                            ga = ga.population_size(p.population_size)
+                                   .tournament_size(p.tournament_size)
+                                   .elite_count(p.elite_count)
+                                   .elite_protect(p.elite_protect)
+                                   .set_mutation(p.mutation_rate as f32, mutation::uniform_mutation(bounds_min, bounds_max))
+                                   .crossover(sbx_crossover(p.sbx_eta));
+                        } else {
+                            ga = ga.population_size(200)
+                                   .tournament_size(10)
+                                   .crossover(sbx_crossover(15.0))
+                                   .set_mutation(0.01, mutation::uniform_mutation(bounds_min, bounds_max))
+                                   .elite_protect(true);
+                        }
+                        ga.uniform_bounds(bounds_min, bounds_max).randomize()
+                    }
+                    GeneticFunction::Ackley => {
+                        let fitness_fn = move |genes: &[f32]| {
                             let x = genes[0];
                             let val = x * x - 10.0 * (2.0 * std::f32::consts::PI * x).cos() + 10.0;
-                            if val.is_nan() || val.is_infinite() { f32::MIN } else { -val }
+                            let raw = if val.is_nan() || val.is_infinite() { default_fitness } else { -val };
+                            match objective {
+                                Objective::Maximize => -raw,
+                                Objective::Minimize => raw,
+                            }
                         };
-                        GeneticAlgorithm::new(1, fitness_fn)
-                            .population_size(200)
-                            .tournament_size(10)
-                            .crossover(sbx_crossover(15.0))
-                            .set_mutation(0.01, mutation::uniform_mutation(-5.12, 5.12))
-                            .uniform_bounds(-5.12, 5.12)
-                            .elite_protect(true)
-                            .randomize()
+                        let mut ga = GeneticAlgorithm::new(1, fitness_fn);
+                        if let Some(p) = params {
+                            ga = ga.population_size(p.population_size)
+                                   .tournament_size(p.tournament_size)
+                                   .elite_count(p.elite_count)
+                                   .elite_protect(p.elite_protect)
+                                   .set_mutation(p.mutation_rate as f32, mutation::uniform_mutation(bounds_min, bounds_max))
+                                   .crossover(sbx_crossover(p.sbx_eta));
+                        } else {
+                            ga = ga.population_size(200)
+                                   .tournament_size(10)
+                                   .crossover(sbx_crossover(15.0))
+                                   .set_mutation(0.01, mutation::uniform_mutation(bounds_min, bounds_max))
+                                   .elite_protect(true);
+                        }
+                        ga.uniform_bounds(bounds_min, bounds_max).randomize()
                     }
                 };
 
                 (ModelState::Genetic {
                     ga: Mutex::new(ga),
                     function: func,
+                    objective,
                 }, 0.0, 0.0)
             }
         };
@@ -213,7 +258,7 @@ impl TaskManager {
         let base_epoch = task.total_epochs;
 
         let new_fitness = match &mut task.model {
-            ModelState::Regression { model, loss_fn, lr, x_train, y_train, x_val, y_val, x_mean: _, x_std: _, y_mean, y_std, history, y_val_true, y_val_pred } => {
+            ModelState::Regression { model, loss_fn, lr, x_train, y_train, x_val, y_val, x_mean: _, x_std: _, y_mean, y_std, history, y_val_true, y_val_pred, x_val_orig: _ } => {
                 let mut model = model.lock().unwrap();
                 let mut loss_fn = loss_fn.lock().unwrap();
 
@@ -331,7 +376,7 @@ impl TaskManager {
                     x_max: task.x_max,
                 }))
             }
-            ModelState::Genetic { ga, function } => {
+            ModelState::Genetic { ga, function, objective: _ } => {
                 let ga = ga.lock().unwrap();
                 let best_gene = ga.best_chromosome();
                 let best_fitness = ga.best_fitness();
@@ -348,11 +393,13 @@ impl TaskManager {
                             let x = x as f32;
                             (x * x - 10.0 * (2.0 * std::f32::consts::PI * x).cos() + 10.0) as f64
                         }).collect();
+                        let population_x: Vec<f64> = ga.population().iter().map(|&v| v as f64).collect();
                         Ok(InferenceResponse::Genetic1D(Genetic1DInference {
                             x_range,
                             y_true,
                             best_gene: best_gene[0] as f64,
                             best_fitness: (-best_fitness) as f64,
+                            population_x,
                         }))
                     }
                     GeneticFunction::RastriginVariant => {
@@ -374,6 +421,20 @@ impl TaskManager {
                                 fitness_grid.push(val as f64);
                             }
                         }
+                        let pop = ga.population();
+                        let n = pop.len() / 2;
+                        let population_x: Vec<f64> = pop[..n].iter().map(|&v| v as f64).collect();
+                        let population_y: Vec<f64> = pop[n..].iter().map(|&v| v as f64).collect();
+                        let population_fitness: Vec<f64> = population_x.iter()
+                            .zip(population_y.iter())
+                            .map(|(&x, &y)| {
+                                let x = x as f32;
+                                let y = y as f32;
+                                let r2 = x * x + y * y;
+                                let r = r2.sqrt();
+                                (0.5 - (r - 0.5).sin() / (1.0 + 0.001 * r2).powi(2)) as f64
+                            })
+                            .collect();
                         Ok(InferenceResponse::Genetic2D(Genetic2DInference {
                             x_grid,
                             y_grid,
@@ -381,6 +442,9 @@ impl TaskManager {
                             best_gene_x: best_gene[0] as f64,
                             best_gene_y: best_gene[1] as f64,
                             best_fitness: best_fitness as f64,
+                            population_x,
+                            population_y,
+                            population_fitness,
                         }))
                     }
                 }
@@ -424,10 +488,38 @@ impl TaskManager {
         let task = task_arc.lock().unwrap();
 
         match &task.model {
-            ModelState::Regression { y_val_true, y_val_pred, .. } => Ok(RecallResponse {
-                y_true: y_val_true.clone(),
-                y_pred: y_val_pred.clone(),
-            }),
+            ModelState::Regression { model, x_mean, x_std, y_mean, y_std, .. } => {
+                let mut model = model.lock().unwrap();
+                let n = 100;
+                let x_min_f = task.x_min as f32;
+                let x_max_f = task.x_max as f32;
+                let step = (x_max_f - x_min_f) / n as f32;
+
+                let y_true: Vec<f64> = (0..=n).map(|i| {
+                    let x = x_min_f + step * i as f32;
+                    let y = match task.regression_fn {
+                        Some(RegressionFunction::Linear) => 2.0 * x + 1.0,
+                        Some(RegressionFunction::Quadratic) => x * x,
+                        Some(RegressionFunction::Sinusoidal) => x.sin(),
+                        None => x,
+                    };
+                    y as f64
+                }).collect();
+
+                let y_pred: Vec<f64> = (0..=n).map(|i| {
+                    let x_orig = x_min_f + step * i as f32;
+                    let x_norm = (x_orig - x_mean) / x_std;
+                    let input = Tensor::build(vec![x_norm], vec![1, 1]).unwrap();
+                    let y_norm = model.forward(&input).data()[0];
+                    (y_norm * (y_std - y_mean) + y_mean) as f64
+                }).collect();
+
+                Ok(RecallResponse {
+                    y_true,
+                    y_pred,
+                    x_val: Vec::new(),
+                })
+            }
             ModelState::Genetic { .. } => Err("Recall not available for genetic tasks".to_string()),
         }
     }

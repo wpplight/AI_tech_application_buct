@@ -17,6 +17,16 @@ function withTimeout(init?: RequestInit): RequestInit {
 export type AlgorithmType = 'regression' | 'genetic'
 export type RegressionFunction = 'linear' | 'quadratic' | 'sinusoidal'
 export type GeneticFunction = 'rastrigin_variant' | 'ackley'
+export type Objective = 'minimize' | 'maximize'
+
+export interface GeneticParams {
+  population_size?: number
+  tournament_size?: number
+  elite_count?: number
+  elite_protect?: boolean
+  mutation_rate?: number
+  sbx_eta?: number
+}
 
 export interface CreateTrainRequest {
   algorithm: AlgorithmType
@@ -26,6 +36,10 @@ export interface CreateTrainRequest {
   noise?: number
   x_min?: number
   x_max?: number
+  min_value?: number
+  max_value?: number
+  objective?: Objective
+  genetic_params?: GeneticParams
 }
 
 export interface EpochRecord {
@@ -42,6 +56,7 @@ export interface TrainingHistory {
 export interface RecallResponse {
   y_true: number[]
   y_pred: number[]
+  x_val: number[]
 }
 
 export interface StepRequest {
@@ -70,6 +85,7 @@ export interface Genetic1DInference {
   y_true: number[]
   best_gene: number
   best_fitness: number
+  population_x: number[]
 }
 
 export interface Genetic2DInference {
@@ -80,6 +96,9 @@ export interface Genetic2DInference {
   best_gene_x: number
   best_gene_y: number
   best_fitness: number
+  population_x: number[]
+  population_y: number[]
+  population_fitness: number[]
 }
 
 export type InferenceResponse = RegressionInference | Genetic1DInference | Genetic2DInference

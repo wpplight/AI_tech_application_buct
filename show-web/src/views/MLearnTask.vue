@@ -100,6 +100,74 @@
           </div>
         </div>
 
+        <div class="form-group" v-if="form.algorithm === 'genetic'">
+          <label class="form-label">变量范围</label>
+          <div class="range-inputs">
+            <div class="range-field">
+              <span class="range-label">最小值 <span class="range-hint">({{ getRangeHint().min }} 默认)</span></span>
+              <input type="number" v-model.number="form.minValue" placeholder="默认" class="range-input" />
+            </div>
+            <div class="range-divider">~</div>
+            <div class="range-field">
+              <span class="range-label">最大值 <span class="range-hint">({{ getRangeHint().max }} 默认)</span></span>
+              <input type="number" v-model.number="form.maxValue" placeholder="默认" class="range-input" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'genetic'">
+          <label class="form-label">优化目标</label>
+          <div class="radio-group">
+            <label class="radio-item" :class="{ active: form.objective === 'minimize' }">
+              <input type="radio" v-model="form.objective" value="minimize" />
+              <span>最小值</span>
+            </label>
+            <label class="radio-item" :class="{ active: form.objective === 'maximize' }">
+              <input type="radio" v-model="form.objective" value="maximize" />
+              <span>最大值</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" v-if="form.algorithm === 'genetic'">
+          <label class="form-label">遗传算法参数</label>
+          <div class="ga-params">
+            <div class="param-row">
+              <div class="param-field">
+                <span class="param-label">种群规模</span>
+                <input type="number" v-model.number="form.populationSize" min="10" max="1000" class="param-input" />
+              </div>
+              <div class="param-field">
+                <span class="param-label">锦标赛大小</span>
+                <input type="number" v-model.number="form.tournamentSize" min="2" max="50" class="param-input" />
+              </div>
+            </div>
+            <div class="param-row">
+              <div class="param-field">
+                <span class="param-label">精英数量</span>
+                <input type="number" v-model.number="form.eliteCount" min="0" max="50" class="param-input" />
+              </div>
+              <div class="param-field">
+                <span class="param-label">精英保护</span>
+                <label class="toggle">
+                  <input type="checkbox" v-model="form.eliteProtect" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="param-row">
+              <div class="param-field">
+                <span class="param-label">变异率</span>
+                <input type="number" v-model.number="form.mutationRate" min="0" max="1" step="0.001" class="param-input" />
+              </div>
+              <div class="param-field">
+                <span class="param-label">SBX eta</span>
+                <input type="number" v-model.number="form.sbxEta" min="1" max="100" class="param-input" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="form-actions">
           <button class="btn-primary" @click="handleCreate" :disabled="creating">
           {{ creating ? '创建中...' : '确认创建' }}
@@ -147,7 +215,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMLearnStore, type TaskItem } from '../stores/mlearn'
-import type { RegressionFunction, GeneticFunction } from '../api/mlearn'
+import type { RegressionFunction, GeneticFunction, Objective, GeneticParams } from '../api/mlearn'
 
 const mlearn = useMLearnStore()
 const router = useRouter()
@@ -162,7 +230,16 @@ const form = reactive({
   learningRate: 0.01,
   noise: 0.1,
   xMin: undefined as number | undefined,
-  xMax: undefined as number | undefined
+  xMax: undefined as number | undefined,
+  minValue: undefined as number | undefined,
+  maxValue: undefined as number | undefined,
+  objective: 'minimize' as Objective,
+  populationSize: 200,
+  tournamentSize: 10,
+  eliteCount: 2,
+  eliteProtect: true,
+  mutationRate: 0.01,
+  sbxEta: 15
 })
 
 const lrOptions = [
@@ -181,8 +258,24 @@ const noiseOptions = [
   { value: 0.5, label: '0.5 (很高)' }
 ]
 
+function getRangeHint() {
+  if (form.geneticFn === 'ackley') {
+    return { min: '-5.12', max: '5.12' }
+  } else {
+    return { min: '-50', max: '50' }
+  }
+}
+
 async function handleCreate() {
   creating.value = true
+  const geneticParams: GeneticParams | undefined = form.algorithm === 'genetic' ? {
+    population_size: form.populationSize,
+    tournament_size: form.tournamentSize,
+    elite_count: form.eliteCount,
+    elite_protect: form.eliteProtect,
+    mutation_rate: form.mutationRate,
+    sbx_eta: form.sbxEta
+  } : undefined
   const id = await mlearn.createTask({
     algorithm: form.algorithm,
     regressionFn: form.regressionFn,
@@ -190,7 +283,11 @@ async function handleCreate() {
     learningRate: form.learningRate,
     noise: form.noise,
     xMin: form.xMin,
-    xMax: form.xMax
+    xMax: form.xMax,
+    minValue: form.minValue,
+    maxValue: form.maxValue,
+    objective: form.objective,
+    geneticParams
   })
   creating.value = false
   if (id) {
@@ -434,10 +531,105 @@ function formatTime(ts: number): string {
   border-color: var(--accent-blue);
 }
 
+.range-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
 .range-divider {
   font-size: 16px;
   color: var(--text-muted);
   margin-top: 18px;
+}
+
+.ga-params {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(139, 92, 246, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.param-row {
+  display: flex;
+  gap: 12px;
+}
+
+.param-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.param-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.param-input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.param-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 20px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle input:checked + .toggle-slider {
+  background-color: #8b5cf6;
+}
+
+.toggle input:checked + .toggle-slider:before {
+  transform: translateX(16px);
 }
 
 .task-list {
